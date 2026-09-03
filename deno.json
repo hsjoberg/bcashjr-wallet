@@ -1,0 +1,51 @@
+{
+  "version": "0.1.0",
+  "nodeModulesDir": "auto",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "react",
+    "lib": ["deno.ns", "dom", "dom.iterable", "esnext"]
+  },
+  "tasks": {
+    "dev": {
+      "dependencies": ["dev:ui", "dev:server"]
+    },
+    "dev:ui": {
+      "command": "vite build --watch",
+      "dependencies": ["ui:build"]
+    },
+    "dev:server": {
+      "command": "deno run -A --watch=main.ts,src/server,src/core main.ts",
+      "dependencies": ["ui:build"]
+    },
+    "start": {
+      "command": "deno run -A main.ts",
+      "dependencies": ["ui:build"]
+    },
+    "ui:dev": "vite",
+    "ui:build": "vite build",
+    "check": "deno check main.ts src/**/*.ts src/**/*.tsx",
+    "test": "deno test -A",
+    "lint": "deno lint",
+    "desktop": "deno task ui:build && deno desktop -A --env-file=desktop.env --exclude-unused-npm --include dist/ui main.ts"
+  },
+  "desktop": {
+    "app": {
+      "name": "BcashJr Wallet",
+      "identifier": "dev.bcashjr.wallet"
+    },
+    "backend": "webview",
+    "output": {
+      "windows": "./dist/desktop/BcashJr Wallet"
+    }
+  },
+  "fmt": {
+    "lineWidth": 100,
+    "semiColons": true,
+    "singleQuote": false
+  },
+  "lint": {
+    "include": ["main.ts", "src/"]
+  },
+  "exclude": ["dist/", "node_modules/"]
+}
