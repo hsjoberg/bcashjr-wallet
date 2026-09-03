@@ -1,0 +1,544 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: Semver increment to publish
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      dry_run:
+        description: Build everything without committing, tagging, or publishing a release
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  DENO_VERSION: "2.9.6"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  prepare:
+    name: Validate and prepare release
+    runs-on: ubuntu-latest
+    outputs:
+      release_version: ${{ steps.version.outputs.release_version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Ensure release runs from master
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_NAME}" != "master" ]]; then
+            echo "This release workflow must run from master." >&2
+            exit 1
+          fi
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: ${{ env.DENO_VERSION }}
+          cache: true
+
+      - name: Validate release candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          deno install --frozen
+          deno task check
+          deno task lint
+          deno task test
+          deno task ui:build
+
+      - name: Compute release version
+        id: version
+        shell: bash
+        env:
+          RELEASE_TYPE: ${{ inputs.release_type }}
+        run: |
+          set -euo pipefail
+
+          deno bump-version --config deno.json "$RELEASE_TYPE"
+          deno bump-version --config package.json "$RELEASE_TYPE"
+
+          deno_version="$(deno eval --no-config 'console.log(JSON.parse(await Deno.readTextFile("deno.json")).version)')"
+          package_version="$(deno eval --no-config 'console.log(JSON.parse(await Deno.readTextFile("package.json")).version)')"
+
+          if [[ "$deno_version" != "$package_version" ]]; then
+            echo "deno.json and package.json versions differ." >&2
+            exit 1
+          fi
+
+          release_tag="v${deno_version}"
+          tag_ref="refs/tags/${release_tag}"
+          if git show-ref --verify --quiet "$tag_ref"; then
+            tag_commit="$(git rev-parse "${tag_ref}^{commit}")"
+            tag_parent="$(git rev-parse "${tag_commit}^")"
+            if [[ "$tag_parent" != "$GITHUB_SHA" ]] ||
+              [[ "$(git rev-parse "${tag_commit}:deno.json")" != "$(git hash-object deno.json)" ]] ||
+              [[ "$(git rev-parse "${tag_commit}:package.json")" != "$(git hash-object package.json)" ]]; then
+              echo "Tag $release_tag exists but does not match this release run." >&2
+              exit 1
+            fi
+            echo "Resuming the existing $release_tag tag."
+          fi
+
+          echo "release_version=$deno_version" >> "$GITHUB_OUTPUT"
+          echo "Preparing v${deno_version}"
+
+      - name: Upload version manifests
+        uses: actions/upload-artifact@v4
+        with:
+          name: version-manifests
+          path: |
+            deno.json
+            package.json
+          if-no-files-found: error
+          retention-days: 14
+          overwrite: true
+
+  build:
+    name: Build ${{ matrix.display_name }}
+    needs: prepare
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos
+            display_name: macOS arm64
+            runner: macos-15
+            target: aarch64-apple-darwin
+            artifact_name: release-macos-arm64
+          - platform: windows
+            display_name: Windows x64
+            runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: release-windows-x64
+          - platform: linux
+            display_name: Linux x64
+            runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: release-linux-x64
+    env:
+      RELEASE_VERSION: ${{ needs.prepare.outputs.release_version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Download version manifests
+        uses: actions/download-artifact@v4
+        with:
+          name: version-manifests
+          path: .
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: ${{ env.DENO_VERSION }}
+          cache: true
+
+      - name: Install dependencies
+        run: deno install --frozen
+
+      - name: Build desktop package
+        shell: bash
+        run: |
+          set -euo pipefail
+          deno task ui:build
+          deno desktop \
+            --target "${{ matrix.target }}" \
+            -A \
+            --env-file=desktop.env \
+            --node-modules-dir=none \
+            --exclude-unused-npm \
+            --include dist/ui \
+            main.ts
+
+      - name: Archive macOS signing input
+        if: ${{ matrix.platform == 'macos' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d "dist/desktop/BcashJr Wallet.app"
+          mkdir -p signing-input
+          tar -czf signing-input/bcashjr-wallet-macos-arm64.tar.gz \
+            -C dist/desktop \
+            "BcashJr Wallet.app"
+
+      - name: Upload macOS signing input
+        if: ${{ matrix.platform == 'macos' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-signing-input-arm64
+          path: signing-input/bcashjr-wallet-macos-arm64.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+          overwrite: true
+
+      - name: Package Windows artifact
+        if: ${{ matrix.platform == 'windows' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $output = "dist/desktop/BcashJr Wallet"
+          if (!(Test-Path -LiteralPath $output -PathType Container)) {
+            throw "Windows desktop output was not created."
+          }
+          if (!(Test-Path -LiteralPath "$output/BcashJr Wallet.exe" -PathType Leaf)) {
+            throw "The Windows desktop output does not contain its launcher."
+          }
+          if (!(Test-Path -LiteralPath "$output/BcashJr Wallet.dll" -PathType Leaf)) {
+            throw "The Windows desktop output does not contain its runtime library."
+          }
+
+          New-Item -ItemType Directory -Force -Path "release-assets" | Out-Null
+          $archive = @{
+            LiteralPath = $output
+            DestinationPath = "release-assets/bcashjr-wallet-v$env:RELEASE_VERSION-windows-x64.zip"
+            CompressionLevel = "Optimal"
+          }
+          Compress-Archive @archive
+
+      - name: Package Linux artifact
+        if: ${{ matrix.platform == 'linux' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          appimage="dist/desktop/bcashjr-wallet.AppImage"
+          test -f "$appimage"
+          chmod +x "$appimage"
+          file "$appimage"
+          mkdir -p release-assets
+          cp "$appimage" "release-assets/bcashjr-wallet-v${RELEASE_VERSION}-linux-x64.AppImage"
+
+      - name: Upload release artifact
+        if: ${{ matrix.platform != 'macos' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 14
+          overwrite: true
+
+  sign-macos:
+    name: Sign and notarize macOS arm64
+    needs:
+      - prepare
+      - build
+    runs-on: macos-15
+    env:
+      RELEASE_VERSION: ${{ needs.prepare.outputs.release_version }}
+    steps:
+      - name: Checkout signing code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: ${{ env.DENO_VERSION }}
+
+      - name: Download macOS signing input
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-signing-input-arm64
+          path: signing-input
+
+      - name: Extract and verify macOS app
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/desktop
+          tar -xzf signing-input/bcashjr-wallet-macos-arm64.tar.gz \
+            -C dist/desktop
+
+          app_path="dist/desktop/BcashJr Wallet.app"
+          test -d "$app_path"
+          actual_version="$(
+            /usr/libexec/PlistBuddy \
+              -c 'Print :CFBundleShortVersionString' \
+              "$app_path/Contents/Info.plist"
+          )"
+          if [[ "$actual_version" != "$RELEASE_VERSION" ]]; then
+            echo "Expected macOS app version $RELEASE_VERSION, got $actual_version." >&2
+            exit 1
+          fi
+
+      - name: Sign macOS app and disk image
+        shell: bash
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${BUILD_CERTIFICATE_BASE64:-}" || -z "${P12_PASSWORD:-}" ]]; then
+            echo "The macOS signing certificate secrets are required." >&2
+            exit 1
+          fi
+
+          certificate_path="$RUNNER_TEMP/developer-id-application.p12"
+          keychain_path="$RUNNER_TEMP/app-signing.keychain-db"
+          keychain_password="$(openssl rand -hex 32)"
+
+          cleanup_signing_keychain() {
+            security delete-keychain "$keychain_path" >/dev/null 2>&1 || true
+            rm -f "$certificate_path"
+          }
+          trap cleanup_signing_keychain EXIT
+
+          echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o "$certificate_path"
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -lut 600 "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security import "$certificate_path" \
+            -P "$P12_PASSWORD" \
+            -x \
+            -T /usr/bin/codesign \
+            -t cert \
+            -f pkcs12 \
+            -k "$keychain_path"
+          rm -f "$certificate_path"
+          unset BUILD_CERTIFICATE_BASE64 P12_PASSWORD
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s \
+            -k "$keychain_password" \
+            "$keychain_path"
+          security list-keychains -d user -s "$keychain_path"
+
+          signing_identity="$(
+            security find-identity -v -p codesigning "$keychain_path" |
+              awk -F '"' '/Developer ID Application:/ && !found { print $2; found = 1 }'
+          )"
+          if [[ -z "$signing_identity" ]]; then
+            echo "No Developer ID Application identity was found in the certificate." >&2
+            exit 1
+          fi
+
+          MACOS_CODESIGN_IDENTITY="$signing_identity" \
+            deno run --no-config -A scripts/prepare_macos_release.ts
+
+      - name: Notarize macOS disk image
+        shell: bash
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${APPLE_ID:-}" || -z "${APPLE_APP_SPECIFIC_PASSWORD:-}" || -z "${APPLE_TEAM_ID:-}" ]]; then
+            echo "The Apple notarization secrets are required." >&2
+            exit 1
+          fi
+
+          dmg_path="dist/desktop/BcashJr Wallet.dmg"
+          xcrun notarytool submit "$dmg_path" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+          xcrun stapler staple "$dmg_path"
+          xcrun stapler validate "$dmg_path"
+          spctl --assess \
+            --type open \
+            --context context:primary-signature \
+            --verbose=2 \
+            "$dmg_path"
+
+      - name: Package macOS artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          cp "dist/desktop/BcashJr Wallet.dmg" \
+            "release-assets/bcashjr-wallet-v${RELEASE_VERSION}-macos-arm64.dmg"
+
+      - name: Upload macOS release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-macos-arm64
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 14
+          overwrite: true
+
+  release:
+    name: Publish release
+    needs:
+      - prepare
+      - build
+      - sign-macos
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      RELEASE_VERSION: ${{ needs.prepare.outputs.release_version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download version manifests
+        uses: actions/download-artifact@v4
+        with:
+          name: version-manifests
+          path: .
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: release-assets
+
+      - name: Verify artifacts and create checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected=(
+            "bcashjr-wallet-v${RELEASE_VERSION}-macos-arm64.dmg"
+            "bcashjr-wallet-v${RELEASE_VERSION}-windows-x64.zip"
+            "bcashjr-wallet-v${RELEASE_VERSION}-linux-x64.AppImage"
+          )
+
+          for asset in "${expected[@]}"; do
+            test -f "release-assets/$asset"
+          done
+
+          cd release-assets
+          sha256sum "${expected[@]}" > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Upload dry-run release bundle
+        if: ${{ inputs.dry_run }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-dry-run-v${{ needs.prepare.outputs.release_version }}
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 14
+          overwrite: true
+
+      - name: Commit or resume release tag
+        if: ${{ inputs.dry_run == false }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_tag="v${RELEASE_VERSION}"
+          tag_ref="refs/tags/${release_tag}"
+
+          git fetch --force --tags origin \
+            "+refs/heads/master:refs/remotes/origin/master"
+
+          if git show-ref --verify --quiet "$tag_ref"; then
+            tag_commit="$(git rev-parse "${tag_ref}^{commit}")"
+            tag_parent="$(git rev-parse "${tag_commit}^")"
+            if [[ "$tag_parent" != "$GITHUB_SHA" ]] ||
+              [[ "$(git rev-parse "${tag_commit}:deno.json")" != "$(git hash-object deno.json)" ]] ||
+              [[ "$(git rev-parse "${tag_commit}:package.json")" != "$(git hash-object package.json)" ]] ||
+              ! git merge-base --is-ancestor "$tag_commit" origin/master; then
+              echo "Tag $release_tag exists but does not match this release run." >&2
+              exit 1
+            fi
+
+            echo "Release tag $release_tag was already pushed; resuming publication."
+            exit 0
+          fi
+
+          if [[ "$(git rev-parse origin/master)" != "$GITHUB_SHA" ]]; then
+            echo "master changed while the release was building; run the workflow again." >&2
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add deno.json package.json
+          git diff --cached --check
+
+          if git diff --cached --quiet; then
+            echo "The release contains no version change." >&2
+            exit 1
+          fi
+
+          git commit -m "Release $release_tag"
+          git tag -a "$release_tag" -m "Release $release_tag"
+          git push --atomic origin "HEAD:master" "$release_tag"
+
+      - name: Create or resume GitHub release
+        if: ${{ inputs.dry_run == false }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          release_tag="v${RELEASE_VERSION}"
+          release_title="BcashJr Wallet $release_tag"
+
+          if release_is_draft="$(
+            gh release view "$release_tag" \
+              --repo "$GITHUB_REPOSITORY" \
+              --json isDraft \
+              --jq .isDraft \
+              2>/dev/null
+          )"; then
+            if [[ "$release_is_draft" == "false" ]]; then
+              published_assets="$(
+                gh release view "$release_tag" \
+                  --repo "$GITHUB_REPOSITORY" \
+                  --json assets \
+                  --jq '.assets[].name'
+              )"
+              for asset in release-assets/*; do
+                asset_name="${asset##*/}"
+                if ! grep -Fxq "$asset_name" <<< "$published_assets"; then
+                  echo "Published release $release_tag is missing $asset_name." >&2
+                  exit 1
+                fi
+              done
+
+              echo "Release $release_tag is already published with every expected asset."
+              exit 0
+            fi
+
+            echo "Resuming draft release $release_tag."
+          else
+            gh release create "$release_tag" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$release_title" \
+              --generate-notes \
+              --verify-tag \
+              --draft
+          fi
+
+          gh release upload "$release_tag" \
+            release-assets/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
+          gh release edit "$release_tag" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$release_title" \
+            --draft=false

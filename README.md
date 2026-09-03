@@ -88,6 +88,34 @@ The Linux WebView build uses the system's GTK 3 and WebKitGTK 4.1 libraries; on 
 these are provided by `libgtk-3-0` and `libwebkit2gtk-4.1-0`. An AppImage downloaded from the web
 may need to be made executable before launching.
 
+## Publishing a release
+
+The **Release** workflow is started manually from GitHub Actions. It validates the project, bumps
+the selected patch, minor, or major version, and builds these artifacts in parallel:
+
+- A Developer ID-signed and notarized macOS arm64 DMG.
+- An unsigned Windows x64 portable ZIP.
+- A Linux x64 AppImage.
+
+A dry run performs the complete build and notarization without committing the version, creating a
+tag, or publishing a GitHub Release. Its files are available as workflow artifacts. A non-dry run
+commits both version manifests to `master`, creates a `v<version>` tag, and publishes the files and
+SHA-256 checksums to a GitHub Release. If publication is interrupted after the tag is pushed,
+rerunning the failed job resumes the matching tag and draft release instead of incrementing again.
+
+Configure these GitHub Actions repository secrets before running the workflow:
+
+- `MACOS_CERTIFICATE_BASE64`: the Developer ID Application certificate and private key exported as
+  a password-protected `.p12`, then Base64 encoded.
+- `MACOS_CERTIFICATE_PASSWORD`: the `.p12` export password.
+- `APPLE_ID`: the Apple Developer account email used for notarization.
+- `APPLE_APP_SPECIFIC_PASSWORD`: an app-specific password for that Apple ID.
+- `APPLE_TEAM_ID`: the Apple Developer Team ID.
+
+The repository's workflow token also needs read and write access to repository contents so it can
+push the release commit and tag. Windows code signing is separate from Apple signing and is not yet
+configured; consequently, Windows may show a SmartScreen warning.
+
 ## Verification
 
 ```powershell
