@@ -1,8 +1,8 @@
 # BcashJr Wallet
 
-BcashJr Wallet is a BIP86 Taproot wallet for Bitcoin and the live BLAKE2b Bitcoin fork. It
-displays coins on both chains, splits shared coins with `SIGHASH_UNIFIED` replay protection, and
-lets each side be spent independently.
+BcashJr Wallet is a BIP86 Taproot wallet for Bitcoin and the live BLAKE2b Bitcoin fork. It displays
+coins on both chains, splits shared coins with `SIGHASH_UNIFIED` replay protection, and lets each
+side be spent independently.
 
 ![BcashJr Wallet interface](./bcashjr-wallet.png)
 
@@ -18,7 +18,7 @@ Bitcoin transactions use standard Taproot `SIGHASH_DEFAULT` signatures. BLAKE tr
 - Independent Bitcoin and BLAKE Esplora backends, balances, fee settings, and UTXO selection.
 - Configurable confirmation requirements, address gap, and BTC or sats display units.
 - One-output, no-change Taproot transactions with RBF and chain-tip locktime.
-- P2TR, P2WPKH, and P2WSH destinations.
+- P2PKH, P2TR, P2WPKH, and P2WSH destinations.
 - BLAKE splitting with `SIGHASH_UNIFIED`. Send shared coins to yourself or another destination to
   move only their BLAKE copies while leaving the Bitcoin outpoints in place.
 - Bitcoin-first spending with an explicit warning whenever replay protection is not guaranteed.
@@ -33,15 +33,15 @@ The wallet keeps current observations from both chains, permanent shared-coin pr
 record of every locally signed transaction. Balances and selectable coins are derived from those
 facts rather than stored as separate state.
 
-Before broadcasting, the complete signed transaction is saved to disk. A network or backend error
-is treated as an unknown broadcast result, never as proof that the transaction failed. The wallet
+Before broadcasting, the complete signed transaction is saved to disk. A network or backend error is
+treated as an unknown broadcast result, never as proof that the transaction failed. The wallet
 retains the transaction and reserves its inputs until it can be verified, rebroadcast, or safely
 abandoned.
 
 Final confirmation refreshes the selected coins on both chains, checks relevant pending
-transactions, rebuilds the transaction, signs locally, verifies every signature, and broadcasts
-only through the selected chain's backend. Both backends must pass their expected fork checkpoint
-before their chain identity is trusted.
+transactions, rebuilds the transaction, signs locally, verifies every signature, and broadcasts only
+through the selected chain's backend. Both backends must pass their expected fork checkpoint before
+their chain identity is trusted.
 
 The `SIGHASH_UNIFIED` implementation is pinned to Bitcoin branch commit
 [`54d757f269d21e784c771497e0a26b35ab7d0c5a`](https://github.com/privkeyio/bitcoin/commit/54d757f269d21e784c771497e0a26b35ab7d0c5a).
@@ -125,8 +125,8 @@ dual-chain synchronization, replay handling, and reorganization recovery.
 ## Backend access
 
 There is no automatic polling. Backend requests occur only when the user syncs, confirms a
-transaction, inspects or replays funding, or starts a full rescan. Recovery processes at most 25
-new addresses per Sync and saves its progress. Final transaction confirmation performs fresh safety
+transaction, inspects or replays funding, or starts a full rescan. Recovery processes at most 25 new
+addresses per Sync and saves its progress. Final transaction confirmation performs fresh safety
 checks even when the dashboard was recently synchronized.
 
 Requests are not retried automatically, including after HTTP 429. Wait for the backend's

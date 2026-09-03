@@ -161,7 +161,7 @@ export function QrScannerModal({ chain, onCancel, onScan }: QrScannerModalProps)
         </div>
         <canvas ref={canvasRef} className="scanner-canvas" aria-hidden="true" />
         <p className="scanner-help">
-          Point the camera at a QR code containing a mainnet P2TR, P2WPKH, or P2WSH address.
+          Point the camera at a QR code containing a mainnet P2PKH, P2TR, P2WPKH, or P2WSH address.
         </p>
         {error && <div className="error-box scanner-error">{error}</div>}
       </section>

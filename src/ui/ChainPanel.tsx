@@ -193,7 +193,7 @@ export function ChainPanel(props: ChainPanelProps) {
                 id={`${chain}-destination`}
                 value={destination}
                 onChange={(event) => onDestination(event.target.value)}
-                placeholder="bc1p… or bc1q…"
+                placeholder="1… or bc1…"
                 required
                 spellCheck={false}
               />

@@ -29,6 +29,8 @@ export function destinationFromQrPayload(payload: string): string {
   try {
     return parseDestinationAddress(candidate).address;
   } catch {
-    throw new Error("QR code must contain a valid mainnet P2TR, P2WPKH, or P2WSH address");
+    throw new Error(
+      "QR code must contain a valid mainnet P2PKH, P2TR, P2WPKH, or P2WSH address",
+    );
   }
 }

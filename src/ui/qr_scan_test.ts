@@ -3,6 +3,7 @@ import { createReceiveQr } from "./receive_qr.ts";
 import { destinationFromQrPayload } from "./qr_scan.ts";
 
 const BIP86_ADDRESS = "bc1p5cyxnuxmeuwuvkwfem96lqzszd02n6xdcjrs20cac6yqjjwudpxqkedrcr";
+const P2PKH_ADDRESS = "1KZTJDo9qtAeE6dexQhcGSiU9e5n8cUyfW";
 const P2WPKH_ADDRESS = "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4";
 const P2WSH_ADDRESS = "bc1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qccfmv3";
 const decodeQr = jsQrModule.default as unknown as (
@@ -38,12 +39,12 @@ Deno.test("camera decoder reads the wallet's uppercase receive QR", () => {
   }
 });
 
-Deno.test("camera QR payload accepts supported bare and BIP21 witness addresses", () => {
-  for (const address of [BIP86_ADDRESS, P2WPKH_ADDRESS, P2WSH_ADDRESS]) {
+Deno.test("camera QR payload accepts supported bare and BIP21 addresses", () => {
+  for (const address of [P2PKH_ADDRESS, BIP86_ADDRESS, P2WPKH_ADDRESS, P2WSH_ADDRESS]) {
+    const caseVariants = address.startsWith("bc1") ? [address, address.toUpperCase()] : [address];
     for (
       const payload of [
-        address,
-        address.toUpperCase(),
+        ...caseVariants,
         `bitcoin:${address}?amount=0.001&label=Sweep`,
       ]
     ) {
@@ -58,7 +59,8 @@ Deno.test("camera QR payload rejects unsupported destinations", () => {
   for (
     const payload of [
       "not a wallet address",
-      "1BoatSLRHtKNngkdXEeobR76b53LETtpyT",
+      "mipcBbFg9gMiCh81Kj8tqqdgoZub1ZJRfn",
+      "3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy",
       "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx",
       `bitcoin:${BIP86_ADDRESS.slice(0, 8).toUpperCase()}${BIP86_ADDRESS.slice(8)}`,
     ]

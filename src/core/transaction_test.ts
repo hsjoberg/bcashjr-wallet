@@ -12,6 +12,8 @@ import {
 
 const RECOVERY =
   "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+const P2PKH = "1KZTJDo9qtAeE6dexQhcGSiU9e5n8cUyfW";
+const P2PKH_SCRIPT = "76a914cb9586c4a23060484e45617ea6f2543eb7e5997288ac";
 const P2WPKH = "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4";
 const P2WSH = "bc1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qccfmv3";
 const P2WSH_SCRIPT = "00201863143c14c5166804bd19203356da136c985678cd4d27a1b8c6329604903262";
@@ -169,11 +171,17 @@ Deno.test("two BIP86 inputs produce a valid unified P2WSH sweep", () => {
   }
 });
 
-Deno.test("Taproot inputs can sweep to P2WPKH and P2WSH on both chains", () => {
+Deno.test("Taproot inputs can sweep to P2PKH, P2WPKH, and P2WSH on both chains", () => {
   const entropy = entropyFromMnemonic(RECOVERY);
   const keychain = new Bip86Keychain(entropy);
   const source = keychain.derive(0, 0);
   const cases = [
+    {
+      address: P2PKH,
+      script: P2PKH_SCRIPT,
+      unifiedVsize: 103,
+      btcVsize: 102,
+    },
     {
       address: P2WPKH,
       script: "0014751e76e8199196d454941c45d1b3a323f1433bd6",
@@ -230,11 +238,12 @@ Deno.test("Taproot inputs can sweep to P2WPKH and P2WSH on both chains", () => {
   entropy.fill(0);
 });
 
-Deno.test("supported witness destinations enforce their standard dust thresholds", () => {
+Deno.test("supported destinations enforce their standard dust thresholds", () => {
   const entropy = entropyFromMnemonic(RECOVERY);
   const keychain = new Bip86Keychain(entropy);
   const source = keychain.derive(0, 0);
   const cases = [
+    { address: P2PKH, dustLimit: DESTINATION_DUST_LIMITS.pkh, vsize: 103 },
     { address: P2WPKH, dustLimit: DESTINATION_DUST_LIMITS.wpkh, vsize: 100 },
     { address: P2WSH, dustLimit: DESTINATION_DUST_LIMITS.wsh, vsize: 112 },
   ];
