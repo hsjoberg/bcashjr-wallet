@@ -65,13 +65,28 @@ when configured, `~/.local/share/bcashjr-wallet` on Linux, and
 `~/Library/Application Support/bcashjr-wallet` on macOS. Set `BCASHJR_DATA_DIR` to override the
 location. Only one wallet process can use a data directory at a time.
 
-Build the native Windows desktop bundle:
+Build the native desktop package:
 
-```powershell
+```bash
 deno task desktop
 ```
 
-The output is written to `dist/desktop/BcashJr Wallet`.
+On macOS this creates `dist/desktop/BcashJr Wallet.app` and `dist/desktop/BcashJr Wallet.dmg`. Local
+builds use ad-hoc signing, so contributors do not need an Apple Developer account. The app includes
+the runtime and camera entitlements in both signing modes. For an official release, provide your
+Developer ID identity:
+
+```bash
+MACOS_CODESIGN_IDENTITY="Developer ID Application: Company Name (TEAMID)" deno task desktop
+```
+
+That signs both the app and DMG with Developer ID; the DMG is the artifact intended for
+distribution. On Windows the task creates `dist/desktop/BcashJr Wallet`, and on Linux it creates
+`dist/desktop/bcashjr-wallet.AppImage`.
+
+The Linux WebView build uses the system's GTK 3 and WebKitGTK 4.1 libraries; on Debian or Ubuntu
+these are provided by `libgtk-3-0` and `libwebkit2gtk-4.1-0`. An AppImage downloaded from the web
+may need to be made executable before launching.
 
 ## Verification
 

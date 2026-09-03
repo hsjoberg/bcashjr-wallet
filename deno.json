@@ -27,7 +27,7 @@
     "check": "deno check main.ts src/**/*.ts src/**/*.tsx",
     "test": "deno test -A",
     "lint": "deno lint",
-    "desktop": "deno task ui:build && deno desktop -A --env-file=desktop.env --exclude-unused-npm --include dist/ui main.ts"
+    "desktop": "deno task ui:build && deno desktop -A --env-file=desktop.env --node-modules-dir=none --exclude-unused-npm --include dist/ui main.ts && deno run -A scripts/prepare_macos_release.ts"
   },
   "desktop": {
     "app": {
@@ -36,7 +36,9 @@
     },
     "backend": "webview",
     "output": {
-      "windows": "./dist/desktop/BcashJr Wallet"
+      "macos": "./dist/desktop/BcashJr Wallet.dmg",
+      "windows": "./dist/desktop/BcashJr Wallet",
+      "linux": "./dist/desktop/bcashjr-wallet.AppImage"
     }
   },
   "fmt": {
