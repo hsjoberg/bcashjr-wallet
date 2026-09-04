@@ -32,7 +32,7 @@
   "desktop": {
     "app": {
       "name": "BcashJr Wallet",
-      "identifier": "dev.bcashjr.wallet"
+      "identifier": "com.bcashjrwallet"
     },
     "backend": "webview",
     "output": {
