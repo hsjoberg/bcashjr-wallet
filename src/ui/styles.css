@@ -1355,7 +1355,7 @@ td small {
 }
 .chain-compose form {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(130px, .6fr);
+  grid-template-columns: minmax(0, 1fr) 110px;
   gap: 12px;
 }
 .chain-compose form button {

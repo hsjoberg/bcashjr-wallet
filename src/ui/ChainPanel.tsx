@@ -215,7 +215,7 @@ export function ChainPanel(props: ChainPanelProps) {
           <div className="compose-field fee-field">
             <span className="field-label-line">
               <label htmlFor={`${chain}-fee-rate`}>Fee rate</label>
-              <span className="optional">sat/vB · optional</span>
+              <span className="optional">sat/vB</span>
             </span>
             <input
               id={`${chain}-fee-rate`}
@@ -225,7 +225,8 @@ export function ChainPanel(props: ChainPanelProps) {
               step="0.1"
               value={feeRate}
               onChange={(event) => onFeeRate(event.target.value)}
-              placeholder="Automatic"
+              placeholder="Auto"
+              title="Optional; leave blank for an automatic fee rate"
             />
           </div>
           <button
