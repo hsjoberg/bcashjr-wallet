@@ -19,8 +19,9 @@ async function run(command: string, args: string[]): Promise<void> {
 
 if (Deno.build.os === "darwin") {
   const projectRoot = fileURLToPath(new URL("../", import.meta.url));
-  const outputApp = join(projectRoot, "dist", "macos", `${APP_NAME}.app`);
-  const outputDmg = join(projectRoot, "dist", "macos", `${APP_NAME}.dmg`);
+  const outputDirectory = join(projectRoot, "dist", "macos");
+  const outputApp = join(outputDirectory, `${APP_NAME}.app`);
+  const outputDmg = join(outputDirectory, `${APP_NAME}.dmg`);
   const entitlements = join(projectRoot, "macos", "entitlements.plist");
   const signingIdentity = Deno.env.get("MACOS_CODESIGN_IDENTITY")?.trim() || AD_HOC_IDENTITY;
   const distributionBuild = signingIdentity !== AD_HOC_IDENTITY;
@@ -28,7 +29,10 @@ if (Deno.build.os === "darwin") {
   // have no Team ID, so enable it only when every component is signed with Developer ID.
   const hardenedRuntimeArgs = distributionBuild ? ["--timestamp", "--options", "runtime"] : [];
   const runtimeLibrary = join(outputApp, "Contents", "MacOS", "libruntime.dylib");
-  const temporaryRoot = await Deno.makeTempDir({ prefix: "bcashjr-macos-release-" });
+  const temporaryRoot = await Deno.makeTempDir({
+    dir: outputDirectory,
+    prefix: "bcashjr-macos-release-",
+  });
   const stagedVolume = join(temporaryRoot, "volume");
   const stagedApp = join(stagedVolume, `${APP_NAME}.app`);
   const replacementDmg = join(temporaryRoot, `${APP_NAME}.dmg`);
