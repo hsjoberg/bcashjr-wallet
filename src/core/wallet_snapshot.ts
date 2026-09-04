@@ -1,9 +1,8 @@
 import { deriveCoinPolicy } from "./coin_policy.ts";
 import { summarizeIntent } from "./intent_state.ts";
+import { observationsAreStale, STALE_OBSERVATIONS_WARNING } from "./observation_freshness.ts";
 import type { WalletLockState, WalletPublicState, WalletSnapshot } from "./types.ts";
 import { canIssueNextReceiveAddress } from "./wallet_sync.ts";
-
-const OBSERVATION_FRESHNESS_MS = 5 * 60 * 1000;
 
 /** Build the immutable, UI-facing view without exposing persisted safety state. */
 export function buildWalletSnapshot(
@@ -62,14 +61,12 @@ export function buildWalletSnapshot(
     (total, output) => total + (sharedSet.has(output.outpoint) ? output.value : 0),
     0,
   );
-  const syncTime = state.lastSyncAt ? Date.parse(state.lastSyncAt) : Number.NaN;
   const hasUnspentOutput = outputs.some((output) =>
     output.blake.unspent === true || output.btc.unspent === true
   );
-  const stale = hasUnspentOutput &&
-    (!Number.isFinite(syncTime) || Date.now() - syncTime > OBSERVATION_FRESHNESS_MS);
+  const stale = observationsAreStale(state.lastSyncAt, hasUnspentOutput);
   const warnings = [
-    ...(stale ? ["Chain observations are stale. Sync before preparing a sweep."] : []),
+    ...(stale ? [STALE_OBSERVATIONS_WARNING] : []),
     ...(!state.recoveryScanComplete
       ? [`Recovery scan is in progress at address index ${state.recoveryScan?.nextIndex ?? 0}.`]
       : []),

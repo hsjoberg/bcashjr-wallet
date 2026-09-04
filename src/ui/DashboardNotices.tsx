@@ -1,3 +1,9 @@
+import { useEffect, useState } from "react";
+import {
+  OBSERVATION_FRESHNESS_MS,
+  observationsAreStale,
+  STALE_OBSERVATIONS_WARNING,
+} from "../core/observation_freshness.ts";
 import type { ChainId, WalletSnapshot } from "../core/types.ts";
 import { transactionPage } from "./explorer_url.ts";
 
@@ -42,12 +48,34 @@ export function DashboardNotices(
     onDismissSuccess(): void;
   },
 ) {
+  const [, refreshFreshness] = useState(0);
+  const hasUnspentOutput = snapshot.outputs.some((output) =>
+    output.blake.unspent === true || output.btc.unspent === true
+  );
+
+  useEffect(() => {
+    if (!hasUnspentOutput || !snapshot.lastSyncAt) return;
+    const syncTime = Date.parse(snapshot.lastSyncAt);
+    if (!Number.isFinite(syncTime)) return;
+    const remaining = syncTime + OBSERVATION_FRESHNESS_MS - Date.now();
+    if (remaining <= 0) return;
+    const timer = globalThis.setTimeout(
+      () => refreshFreshness((current) => current + 1),
+      remaining + 1,
+    );
+    return () => globalThis.clearTimeout(timer);
+  }, [hasUnspentOutput, snapshot.lastSyncAt]);
+
+  const stale = observationsAreStale(snapshot.lastSyncAt, hasUnspentOutput);
+  const warnings = snapshot.warnings.filter((warning) => warning !== STALE_OBSERVATIONS_WARNING);
+  if (stale) warnings.unshift(STALE_OBSERVATIONS_WARNING);
+
   return (
     <>
-      {snapshot.warnings
+      {warnings
         .filter((warning) => !dismissedWarnings.has(warning))
         .map((warning) => {
-          const stale = warning.startsWith("Chain observations are stale");
+          const stale = warning === STALE_OBSERVATIONS_WARNING;
           return (
             <div
               className={`warning-banner ${stale ? "stale-warning" : ""}`}
