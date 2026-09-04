@@ -178,10 +178,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -d "dist/desktop/BcashJr Wallet.app"
+          test -d "dist/macos/BcashJr Wallet.app"
           mkdir -p signing-input
           tar -czf signing-input/bcashjr-wallet-macos-arm64.tar.gz \
-            -C dist/desktop \
+            -C dist/macos \
             "BcashJr Wallet.app"
 
       - name: Upload macOS signing input
@@ -199,7 +199,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $output = "dist/desktop/BcashJr Wallet"
+          $output = "dist/windows/BcashJr Wallet"
           if (!(Test-Path -LiteralPath $output -PathType Container)) {
             throw "Windows desktop output was not created."
           }
@@ -223,7 +223,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          appimage="dist/desktop/bcashjr-wallet.AppImage"
+          appimage="dist/linux/bcashjr-wallet.AppImage"
           test -f "$appimage"
           chmod +x "$appimage"
           file "$appimage"
@@ -269,11 +269,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p dist/desktop
+          mkdir -p dist/macos
           tar -xzf signing-input/bcashjr-wallet-macos-arm64.tar.gz \
-            -C dist/desktop
+            -C dist/macos
 
-          app_path="dist/desktop/BcashJr Wallet.app"
+          app_path="dist/macos/BcashJr Wallet.app"
           test -d "$app_path"
           actual_version="$(
             /usr/libexec/PlistBuddy \
@@ -354,7 +354,7 @@ jobs:
             exit 1
           fi
 
-          dmg_path="dist/desktop/BcashJr Wallet.dmg"
+          dmg_path="dist/macos/BcashJr Wallet.dmg"
           xcrun notarytool submit "$dmg_path" \
             --apple-id "$APPLE_ID" \
             --password "$APPLE_APP_SPECIFIC_PASSWORD" \
@@ -373,7 +373,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release-assets
-          cp "dist/desktop/BcashJr Wallet.dmg" \
+          cp "dist/macos/BcashJr Wallet.dmg" \
             "release-assets/bcashjr-wallet-v${RELEASE_VERSION}-macos-arm64.dmg"
 
       - name: Upload macOS release artifact

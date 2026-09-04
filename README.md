@@ -71,7 +71,7 @@ Build the native desktop package:
 deno task desktop
 ```
 
-On macOS this creates `dist/desktop/BcashJr Wallet.app` and `dist/desktop/BcashJr Wallet.dmg`. Local
+On macOS this creates `dist/macos/BcashJr Wallet.app` and `dist/macos/BcashJr Wallet.dmg`. Local
 builds use ad-hoc signing, so contributors do not need an Apple Developer account. The app includes
 the runtime and camera entitlements in both signing modes. For an official release, provide your
 Developer ID identity:
@@ -81,8 +81,8 @@ MACOS_CODESIGN_IDENTITY="Developer ID Application: Company Name (TEAMID)" deno t
 ```
 
 That signs both the app and DMG with Developer ID; the DMG is the artifact intended for
-distribution. On Windows the task creates `dist/desktop/BcashJr Wallet`, and on Linux it creates
-`dist/desktop/bcashjr-wallet.AppImage`.
+distribution. On Windows the task creates `dist/windows/BcashJr Wallet`, and on Linux it creates
+`dist/linux/bcashjr-wallet.AppImage`.
 
 The Linux WebView build uses the system's GTK 3 and WebKitGTK 4.1 libraries; on Debian or Ubuntu
 these are provided by `libgtk-3-0` and `libwebkit2gtk-4.1-0`. An AppImage downloaded from the web

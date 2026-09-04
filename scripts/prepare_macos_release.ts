@@ -19,8 +19,8 @@ async function run(command: string, args: string[]): Promise<void> {
 
 if (Deno.build.os === "darwin") {
   const projectRoot = fileURLToPath(new URL("../", import.meta.url));
-  const outputApp = join(projectRoot, "dist", "desktop", `${APP_NAME}.app`);
-  const outputDmg = join(projectRoot, "dist", "desktop", `${APP_NAME}.dmg`);
+  const outputApp = join(projectRoot, "dist", "macos", `${APP_NAME}.app`);
+  const outputDmg = join(projectRoot, "dist", "macos", `${APP_NAME}.dmg`);
   const entitlements = join(projectRoot, "macos", "entitlements.plist");
   const signingIdentity = Deno.env.get("MACOS_CODESIGN_IDENTITY")?.trim() || AD_HOC_IDENTITY;
   const distributionBuild = signingIdentity !== AD_HOC_IDENTITY;

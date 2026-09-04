@@ -36,9 +36,9 @@
     },
     "backend": "webview",
     "output": {
-      "macos": "./dist/desktop/BcashJr Wallet.dmg",
-      "windows": "./dist/desktop/BcashJr Wallet",
-      "linux": "./dist/desktop/bcashjr-wallet.AppImage"
+      "macos": "./dist/macos/BcashJr Wallet.dmg",
+      "windows": "./dist/windows/BcashJr Wallet",
+      "linux": "./dist/linux/bcashjr-wallet.AppImage"
     }
   },
   "fmt": {
