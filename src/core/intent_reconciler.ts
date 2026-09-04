@@ -69,7 +69,7 @@ export class IntentReconciler {
 
   async refreshStatuses(
     clients: WalletClients,
-    tipHeights: Record<ChainId, number>,
+    tipHeights: Partial<Record<ChainId, number>>,
     errors: string[],
     relevantOutpoints?: Set<string>,
   ): Promise<void> {
@@ -86,11 +86,13 @@ export class IntentReconciler {
     const refreshedIntentIds = new Set<string>();
     for (const intent of intents) {
       if (relevantIntentIds && !relevantIntentIds.has(intent.id)) continue;
+      const tipHeight = tipHeights[intent.chain];
+      if (tipHeight === undefined) continue;
       try {
         await this.refreshOne(
           intent.id,
           clients[intent.chain],
-          tipHeights[intent.chain],
+          tipHeight,
           refreshedIntentIds,
         );
       } catch (error) {

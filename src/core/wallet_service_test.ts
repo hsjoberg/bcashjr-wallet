@@ -119,6 +119,7 @@ function baseState(coins: PersistedCoin[] = []): WalletPublicState {
 class MockEsplora extends EsploraClient {
   tip = 961_650;
   checkpointHash: string;
+  tipFailure: Error | null = null;
   addressRequests = 0;
   utxos = new Map<string, EsploraUtxo[]>();
   usedAddresses = new Set<string>();
@@ -138,6 +139,7 @@ class MockEsplora extends EsploraClient {
   }
 
   override tipHeight(): Promise<number> {
+    if (this.tipFailure) return Promise.reject(this.tipFailure);
     return Promise.resolve(this.tip);
   }
 
@@ -621,6 +623,49 @@ Deno.test("partial coin scans do not claim a fresh synchronization", async () =>
     !snapshot.warnings.some((warning) => warning.includes("stale"))
   ) {
     throw new Error("A partial coin scan was presented as a fresh synchronization");
+  }
+});
+
+Deno.test("BTC coin observations update when the BLAKE UTXO scan fails", async () => {
+  const stale = new Date(Date.now() - 10 * 60 * 1_000).toISOString();
+  const cached = coin("13".repeat(32), 50_000, FIXTURE_ADDRESSES[0], true, true);
+  const arrivedOnBtc = coin("15".repeat(32), 30_000, FIXTURE_ADDRESSES[0], false, true);
+  const state = baseState([cached]);
+  state.lastSyncAt = stale;
+  state.sharedProvenance[cached.outpoint] = { firstObservedAt: stale };
+  const { repository, service, blake, btc } = await unlockedFixture(state);
+  blake.utxoFailure = new Error("temporary BLAKE UTXO failure");
+  btc.utxos.set(cached.address, [utxo(arrivedOnBtc)]);
+
+  const snapshot = await service.sync();
+  const persisted = await repository.loadState();
+  const retained = persisted.coins.find((candidate) => candidate.outpoint === cached.outpoint);
+  const discovered = persisted.coins.find((candidate) =>
+    candidate.outpoint === arrivedOnBtc.outpoint
+  );
+  if (
+    snapshot.balances.blake !== cached.value || snapshot.balances.btc !== arrivedOnBtc.value ||
+    retained?.blake.unspent !== true || retained.btc.unspent !== false ||
+    discovered?.btc.unspent !== true || discovered.blake.backendOk !== false ||
+    snapshot.lastSyncAt !== stale ||
+    !snapshot.lastSyncError?.includes("temporary BLAKE UTXO failure")
+  ) {
+    throw new Error("The successful BTC scan was not installed independently");
+  }
+});
+
+Deno.test("BTC coin observations update when the BLAKE tip request fails", async () => {
+  const arrivedOnBtc = coin("16".repeat(32), 25_000, FIXTURE_ADDRESSES[0], false, true);
+  const { service, blake, btc } = await unlockedFixture(baseState());
+  blake.tipFailure = new Error("temporary BLAKE tip failure");
+  btc.utxos.set(arrivedOnBtc.address, [utxo(arrivedOnBtc)]);
+
+  const snapshot = await service.sync();
+  if (
+    snapshot.balances.btc !== arrivedOnBtc.value || snapshot.balances.blake !== 0 ||
+    !snapshot.lastSyncError?.includes("temporary BLAKE tip failure")
+  ) {
+    throw new Error("A failed BLAKE tip prevented the successful BTC scan");
   }
 });
 

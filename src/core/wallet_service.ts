@@ -430,35 +430,44 @@ export class WalletService {
     if (!btcTip) errors.push(`BTC: ${settledErrorReason(tipResults[1])}`);
     if (blakeTip) this.#state.tips.blake = blakeTip;
     if (btcTip) this.#state.tips.btc = btcTip;
-    if (!blakeTip || !btcTip) {
+    if (!blakeTip && !btcTip) {
       this.#state.lastSyncError = errors.join("; ");
       await this.#saveWorkingState();
       return this.snapshot();
     }
 
     const recovering = !this.#state.recoveryScanComplete;
-    let scan = recovering
+    const available = { blake: Boolean(blakeTip), btc: Boolean(btcTip) };
+    let scan = recovering && blakeTip && btcTip
       ? await scanRecoveryAddresses(this.#state, this.#keychain, clients, errors)
-      : await scanCurrentUtxos(this.#state, clients, errors);
+      : await scanCurrentUtxos(this.#state, clients, errors, available);
     let recoveryVerified = false;
     if (recovering && scan.complete) {
-      const finalScan = await scanCurrentUtxos(this.#state, clients, errors);
+      const finalScan = await scanCurrentUtxos(this.#state, clients, errors, available);
       if (finalScan.authoritative) {
         scan = finalScan;
         recoveryVerified = true;
       }
     }
-    installDiscoveredOutputs(this.#state, scan, blakeTip.height, btcTip.height);
+    installDiscoveredOutputs(
+      this.#state,
+      scan,
+      blakeTip?.height ?? this.#state.tips.blake?.height ?? 0,
+      btcTip?.height ?? this.#state.tips.btc?.height ?? 0,
+    );
     await this.#intentReconciler.refreshStatuses(
       clients,
-      { blake: blakeTip.height, btc: btcTip.height },
+      {
+        ...(blakeTip ? { blake: blakeTip.height } : {}),
+        ...(btcTip ? { btc: btcTip.height } : {}),
+      },
       errors,
     );
     if (recovering && recoveryVerified) {
       this.#state.recoveryScanComplete = true;
       this.#state.recoveryScan = undefined;
       advanceReceiveAddressPastUsed(this.#state, this.#keychain);
-    } else if (!recovering && scan.authoritative) {
+    } else if (!recovering) {
       advanceReceiveAddressAfterConfirmedDeposit(this.#state, this.#keychain);
     }
     if (scan.authoritative) this.#state.lastSyncAt = new Date().toISOString();

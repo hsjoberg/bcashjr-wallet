@@ -17,9 +17,17 @@ interface DiscoveredOutput {
 
 export interface AddressScanResult {
   complete: boolean;
+  /** True only when both chains were scanned completely. */
   authoritative: boolean;
+  /** A successful chain can still be authoritative when the other backend fails. */
+  authoritativeChains: Record<ChainId, boolean>;
   outputs: Map<string, DiscoveredOutput>;
 }
+
+const NO_AUTHORITATIVE_CHAINS: Record<ChainId, boolean> = {
+  blake: false,
+  btc: false,
+};
 
 function hasActivity(info: EsploraAddress): boolean {
   return info.chain_stats.tx_count + info.mempool_stats.tx_count > 0;
@@ -128,7 +136,12 @@ export async function scanRecoveryAddresses(
       !addUtxos(outputs, address, "btc", utxoResults[1].value, errors)
     ) {
       state.recoveryScan = { nextIndex: index, trailingGap: gap };
-      return { complete: false, authoritative: false, outputs };
+      return {
+        complete: false,
+        authoritative: false,
+        authoritativeChains: { ...NO_AUTHORITATIVE_CHAINS },
+        outputs,
+      };
     }
 
     if (gap >= scanGap && index >= state.nextReceiveIndex - 1) {
@@ -147,15 +160,22 @@ export async function scanRecoveryAddresses(
     }
     state.recoveryScan = { nextIndex: index, trailingGap: gap };
   }
-  return { complete, authoritative: false, outputs };
+  return {
+    complete,
+    authoritative: false,
+    authoritativeChains: { ...NO_AUTHORITATIVE_CHAINS },
+    outputs,
+  };
 }
 
 export async function scanCurrentUtxos(
   state: WalletPublicState,
   clients: WalletClients,
   errors: string[],
+  available: Record<ChainId, boolean> = { blake: true, btc: true },
 ): Promise<AddressScanResult> {
   const outputs = new Map<string, DiscoveredOutput>();
+  const authoritativeChains = { ...available };
   const addresses = state.addresses
     // Recovery derives a trailing unused lookahead window. Keep every one of those
     // addresses under observation so a delayed invoice remains discoverable.
@@ -163,31 +183,40 @@ export async function scanCurrentUtxos(
     .sort((left, right) => left.index - right.index);
   if (addresses.length === 0) {
     errors.push("No issued receive address is available");
-    return { complete: false, authoritative: false, outputs };
+    return {
+      complete: false,
+      authoritative: false,
+      authoritativeChains: { ...NO_AUTHORITATIVE_CHAINS },
+      outputs,
+    };
   }
   for (const address of addresses) {
+    const queried = { ...authoritativeChains };
+    if (!queried.blake && !queried.btc) break;
     const results = await Promise.allSettled([
-      clients.blake.addressUtxos(address.address),
-      clients.btc.addressUtxos(address.address),
+      queried.blake ? clients.blake.addressUtxos(address.address) : Promise.resolve([]),
+      queried.btc ? clients.btc.addressUtxos(address.address) : Promise.resolve([]),
     ]);
-    if (results[0].status === "rejected" || results[1].status === "rejected") {
-      if (results[0].status === "rejected") {
-        errors.push(`BLAKE UTXOs ${address.index}: ${settledErrorReason(results[0])}`);
+
+    for (const [index, chain] of (["blake", "btc"] as const).entries()) {
+      if (!queried[chain]) continue;
+      const result = results[index];
+      if (result.status === "rejected") {
+        errors.push(
+          `${chain.toUpperCase()} UTXOs ${address.index}: ${settledErrorReason(result)}`,
+        );
+        authoritativeChains[chain] = false;
+        continue;
       }
-      if (results[1].status === "rejected") {
-        errors.push(`BTC UTXOs ${address.index}: ${settledErrorReason(results[1])}`);
+      if (!addUtxos(outputs, address, chain, result.value, errors)) {
+        authoritativeChains[chain] = false;
+        continue;
       }
-      return { complete: false, authoritative: false, outputs };
-    }
-    address.used ||= results[0].value.length > 0 || results[1].value.length > 0;
-    if (
-      !addUtxos(outputs, address, "blake", results[0].value, errors) ||
-      !addUtxos(outputs, address, "btc", results[1].value, errors)
-    ) {
-      return { complete: false, authoritative: false, outputs };
+      address.used ||= result.value.length > 0;
     }
   }
-  return { complete: true, authoritative: true, outputs };
+  const authoritative = authoritativeChains.blake && authoritativeChains.btc;
+  return { complete: authoritative, authoritative, authoritativeChains, outputs };
 }
 
 export function installDiscoveredOutputs(
@@ -232,12 +261,12 @@ export function installDiscoveredOutputs(
       path: address.path,
       blake: blake
         ? utxoObservation(blake, blakeTipHeight)
-        : !scan.authoritative
+        : !scan.authoritativeChains.blake
         ? structuredClone(known?.blake ?? unknown)
         : utxoObservation(undefined, blakeTipHeight),
       btc: btc
         ? utxoObservation(btc, btcTipHeight)
-        : !scan.authoritative
+        : !scan.authoritativeChains.btc
         ? structuredClone(known?.btc ?? unknown)
         : utxoObservation(undefined, btcTipHeight),
     };
@@ -252,20 +281,22 @@ export function installDiscoveredOutputs(
     current.push(coin);
     previous.delete(outpoint);
   }
-  if (!scan.authoritative) {
-    // A partial backend response must never be interpreted as proof that an old coin vanished.
-    current.push(...previous.values());
-  } else {
-    for (const coin of previous.values()) {
-      if (!state.sharedProvenance[coin.outpoint] && !governed.has(coin.outpoint)) continue;
-      // Retain identity and fresh absence observations. Provenance and intent history are
-      // separate, monotonic safety facts.
-      current.push({
-        ...coin,
-        blake: utxoObservation(undefined, blakeTipHeight),
-        btc: utxoObservation(undefined, btcTipHeight),
-      });
-    }
+  for (const coin of previous.values()) {
+    const refreshed: PersistedCoin = {
+      ...coin,
+      blake: scan.authoritativeChains.blake
+        ? utxoObservation(undefined, blakeTipHeight)
+        : coin.blake,
+      btc: scan.authoritativeChains.btc ? utxoObservation(undefined, btcTipHeight) : coin.btc,
+    };
+    const fullyAbsent = scan.authoritative && refreshed.blake.unspent === false &&
+      refreshed.btc.unspent === false;
+    if (
+      fullyAbsent && !state.sharedProvenance[coin.outpoint] && !governed.has(coin.outpoint)
+    ) continue;
+    // Failed chains retain their cached observation; successful chains can still record
+    // absence independently. Provenance and intent history remain monotonic safety facts.
+    current.push(refreshed);
   }
   state.coins = current.sort((left, right) => left.outpoint.localeCompare(right.outpoint));
 }
