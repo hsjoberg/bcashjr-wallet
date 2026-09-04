@@ -17,7 +17,8 @@ Bitcoin transactions use standard Taproot `SIGHASH_DEFAULT` signatures. BLAKE tr
 - Local password protection using scrypt and XChaCha20-Poly1305.
 - Independent Bitcoin and BLAKE Esplora backends, balances, fee settings, and UTXO selection.
 - Configurable confirmation requirements, address gap, and BTC or sats display units.
-- One-output, no-change Taproot transactions with RBF and chain-tip locktime.
+- Sweep-only Taproot transactions with RBF and chain-tip locktime. Every selected UTXO is consumed
+  in full; after fees, everything goes to one destination with no change output.
 - P2PKH, P2TR, P2WPKH, and P2WSH destinations.
 - BLAKE splitting with `SIGHASH_UNIFIED`. Send shared coins to yourself or another destination to
   move only their BLAKE copies while leaving the Bitcoin outpoints in place.
