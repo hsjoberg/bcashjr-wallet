@@ -471,6 +471,10 @@ input[type="checkbox"] {
 .funding-warning-list li + li {
   margin-top: 7px;
 }
+.funding-warning-modal > .funding-disclaimer {
+  margin-top: 18px;
+  color: #f2aaa5;
+}
 .scanner-modal {
   width: min(560px, 100%);
   padding: 24px;

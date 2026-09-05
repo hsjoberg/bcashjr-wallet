@@ -214,6 +214,10 @@ function Setup({ onReady }: SetupProps) {
               <li>Verify the test deposit appears on the expected chain or chains.</li>
               <li>Test splitting and spending, then confirm the resulting transactions.</li>
             </ul>
+            <p className="funding-disclaimer">
+              This wallet is provided “as is,” without warranties. You use it at your own risk. The
+              developers accept no responsibility for lost funds.
+            </p>
             <div className="modal-actions">
               <button type="button" className="secondary" autoFocus onClick={closeCreationWarning}>
                 Go back
