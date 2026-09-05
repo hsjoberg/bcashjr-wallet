@@ -145,7 +145,7 @@ export function ChainPanel(props: ChainPanelProps) {
               : shared && isSelectable && observation.tx?.present && !observation.tx.confirmed
               ? "0-conf allowed"
               : shared && isSelectable
-              ? "BTC remains"
+              ? "Split this coin"
               : shared
               ? "Waiting"
               : isSelectable && observation.tx?.present && !observation.tx.confirmed
