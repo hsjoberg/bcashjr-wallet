@@ -52,6 +52,36 @@ function unified(
   };
 }
 
+Deno.test("coin selection applies each chain's own confirmation target", () => {
+  for (const [btcConfirmations, blakeConfirmations] of [[1, 6], [6, 1], [2, 2]]) {
+    const settings = { ...DEFAULT_SETTINGS, btcConfirmations, blakeConfirmations };
+    for (const [onBlake, onBtc] of [[true, true], [false, true], [true, false]]) {
+      const funding = coin("10".repeat(32), onBlake, onBtc);
+      const policy = deriveCoinPolicy(funding, onBlake && onBtc, [], settings);
+      if (
+        policy.btcSelectable !== (onBtc && btcConfirmations <= 2) ||
+        policy.blakeSelectable !== (onBlake && blakeConfirmations <= 2)
+      ) throw new Error("Coin selection used the other chain's confirmation target");
+    }
+  }
+});
+
+Deno.test("zero-confirmation funding is enabled independently per chain", () => {
+  const funding = coin("10".repeat(32), true, true);
+  for (const chain of ["btc", "blake"] as const) {
+    funding[chain].tx = { present: true, confirmed: false, confirmations: 0 };
+  }
+  for (const chain of ["btc", "blake"] as const) {
+    const settings = { ...DEFAULT_SETTINGS, [`${chain}Confirmations`]: 0 };
+    const policy = deriveCoinPolicy(funding, true, [], settings);
+    if (
+      policy.btcSelectable !== (chain === "btc") || policy.blakeSelectable !== (chain === "blake")
+    ) {
+      throw new Error("Allowing zero confirmations affected the other chain");
+    }
+  }
+});
+
 Deno.test("central coin policy derives shared, split, and replay-risk selection", () => {
   const shared = coin("11".repeat(32), true, true);
   let policy = deriveCoinPolicy(shared, true, [], DEFAULT_SETTINGS);
@@ -153,7 +183,8 @@ Deno.test("central coin policy blocks contradictory history and governs replay o
   const replayed = { ...btcOnly, blake: observed(true) };
   let policy = deriveCoinPolicy(replayed, true, [replay], {
     ...DEFAULT_SETTINGS,
-    fundingConfirmations: 0,
+    btcConfirmations: 0,
+    blakeConfirmations: 0,
   });
   if (policy.blakeSelectable || policy.splittable) {
     throw new Error("Pending replay exposed a child spend");
@@ -161,7 +192,8 @@ Deno.test("central coin policy blocks contradictory history and governs replay o
   replay.phase = "confirmed";
   policy = deriveCoinPolicy(replayed, true, [replay], {
     ...DEFAULT_SETTINGS,
-    fundingConfirmations: 0,
+    btcConfirmations: 0,
+    blakeConfirmations: 0,
   });
   if (!policy.splittable) throw new Error("Confirmed replay did not release its output");
 

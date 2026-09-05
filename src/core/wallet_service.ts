@@ -330,7 +330,7 @@ export class WalletService {
       }
       next.amountUnit = update.amountUnit;
     }
-    for (const key of ["fundingConfirmations", "scanGap"] as const) {
+    for (const key of ["btcConfirmations", "blakeConfirmations", "scanGap"] as const) {
       if (update[key] !== undefined) next[key] = update[key];
     }
     for (const key of ["btcFeeRate", "blakeFeeRate"] as const) {
@@ -339,11 +339,11 @@ export class WalletService {
     }
     next.blakeApiUrl = normalizeEsploraUrl(next.blakeApiUrl);
     next.btcApiUrl = normalizeEsploraUrl(next.btcApiUrl);
-    if (
-      !Number.isSafeInteger(next.fundingConfirmations) || next.fundingConfirmations < 0 ||
-      next.fundingConfirmations > 1_000
-    ) {
-      throw new Error("Funding confirmations must be an integer from 0 to 1,000");
+    for (const chain of ["btc", "blake"] as const) {
+      const confirmations = next[`${chain}Confirmations`];
+      if (!Number.isSafeInteger(confirmations) || confirmations < 0 || confirmations > 1_000) {
+        throw new Error(`${chain.toUpperCase()} confirmations must be an integer from 0 to 1,000`);
+      }
     }
     if (!Number.isSafeInteger(next.scanGap) || next.scanGap < 1 || next.scanGap > 1_000) {
       throw new Error("Address gap must be an integer from 1 to 1,000");
@@ -365,7 +365,11 @@ export class WalletService {
       }
     }
     const scanGapIncreased = next.scanGap > this.#state.settings.scanGap;
+    const confirmationTargetsChanged =
+      next.btcConfirmations !== this.#state.settings.btcConfirmations ||
+      next.blakeConfirmations !== this.#state.settings.blakeConfirmations;
     this.#state.settings = next;
+    if (confirmationTargetsChanged) this.#intentReconciler.reapplyConfirmationTargets();
     if (scanGapIncreased && this.#state.recoveryScanComplete) {
       const addresses = this.#state.addresses
         .filter((address) => address.branch === 0)

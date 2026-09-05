@@ -546,13 +546,24 @@ Deno.test("settings enforce independent fee ceilings, URLs, units, and gap resca
     btcFeeRate: 100,
     blakeFeeRate: 99.9,
     amountUnit: "sat",
+    btcConfirmations: 2,
+    blakeConfirmations: 6,
   });
   if (
     snapshot.settings.btcFeeRate !== 100 || snapshot.settings.blakeFeeRate !== 99.9 ||
-    snapshot.settings.amountUnit !== "sat"
+    snapshot.settings.amountUnit !== "sat" ||
+    snapshot.settings.btcConfirmations !== 2 || snapshot.settings.blakeConfirmations !== 6
   ) throw new Error("Current settings were not preserved exactly");
   for (const update of [{ btcFeeRate: 100.1 }, { blakeFeeRate: 100.1 }]) {
     await assertRejects(() => service.updateSettings(update), "100 sat/vB");
+  }
+  for (const key of ["btcConfirmations", "blakeConfirmations"] as const) {
+    for (const value of [-1, 1_001, 1.5, NaN, "1", null]) {
+      await assertRejects(
+        () => service.updateSettings({ [key]: value }),
+        "confirmations must be an integer",
+      );
+    }
   }
   await assertRejects(
     () => service.updateSettings({ btcApiUrl: "http://example.com/api" }),
@@ -884,7 +895,8 @@ Deno.test("routine sync monitors restored unused lookahead addresses", async () 
 Deno.test("a confirmed child spend advances an address whose zero-conf deposit was spent", async () => {
   const deposit = coin("26".repeat(32), 50_000, FIXTURE_ADDRESSES[0], false, true, false);
   const state = baseState([deposit]);
-  state.settings.fundingConfirmations = 0;
+  state.settings.btcConfirmations = 0;
+  state.settings.blakeConfirmations = 0;
   const { service, blake, btc } = await unlockedFixture(state);
   blake.utxos.set(deposit.address, []);
   btc.utxos.set(deposit.address, [utxo(deposit, false)]);
@@ -1182,7 +1194,8 @@ Deno.test("a resurfaced BTC spend supersedes its conflicting replacement", async
 Deno.test("a resurfaced exposed spend retains its input for receive rotation", async () => {
   const source = coin("46".repeat(32), 75_000, FIXTURE_ADDRESSES[0], false, true, false);
   const state = baseState([source]);
-  state.settings.fundingConfirmations = 0;
+  state.settings.btcConfirmations = 0;
+  state.settings.blakeConfirmations = 0;
   const { repository, service, blake, btc } = await unlockedFixture(state);
   blake.utxos.set(source.address, []);
   btc.utxos.set(source.address, [utxo(source, false)]);
@@ -1471,6 +1484,93 @@ Deno.test("pending-split BTC spend retains the related split in its risk acknowl
     !acknowledgementPersisted || result.chain !== "btc" ||
     snapshot.intents.find((intent) => intent.txid === result.txid)?.phase !== "seen"
   ) throw new Error("Acknowledged emergency BTC spend was not durably recorded");
+});
+
+Deno.test("per-chain targets govern split protection and refresh cached intent phases", async () => {
+  const shared = coin("61".repeat(32), 100_000, FIXTURE_ADDRESSES[0], true, true);
+  const state = baseState([shared]);
+  state.settings.blakeConfirmations = 6;
+  const { repository, service, blake, btc } = await unlockedFixture(state);
+  blake.utxos.set(shared.address, [utxo(shared)]);
+  btc.utxos.set(shared.address, [utxo(shared)]);
+  await service.sync();
+
+  const splitPreview = await service.previewSpend({
+    chain: "blake",
+    purpose: "split",
+    outpoints: [shared.outpoint],
+    destination: FIXTURE_ADDRESSES[1].address,
+    feeRate: 2,
+  });
+  const split = await service.confirmSpend(splitPreview.id);
+  blake.utxos.set(shared.address, []);
+  const btcRequest = {
+    chain: "btc" as const,
+    purpose: "send" as const,
+    outpoints: [shared.outpoint],
+    destination: FIXTURE_ADDRESSES[1].address,
+    feeRate: 2,
+  };
+  for (const confirmations of [0, 1, 5, 6]) {
+    await service.updateSettings({ blakeConfirmations: confirmations === 0 ? 0 : 6 });
+    blake.statuses.set(
+      split.txid,
+      confirmations === 0 ? { confirmed: false } : {
+        confirmed: true,
+        block_height: blake.tip - confirmations + 1,
+      },
+    );
+    const snapshot = await service.sync();
+    const expectedPhase = confirmations < 6 ? "seen" : "confirmed";
+    if (snapshot.intents.find((intent) => intent.txid === split.txid)?.phase !== expectedPhase) {
+      throw new Error(`Incorrect split phase at ${confirmations} BLAKE confirmations`);
+    }
+    const preview = await service.previewSpend(btcRequest);
+    if (
+      preview.risks.length !== (confirmations < 6 ? 1 : 0) ||
+      preview.replayProtectionSplitIntentIds.length !== (confirmations < 6 ? 0 : 1)
+    ) throw new Error("Replay warning did not follow the BLAKE confirmation target");
+    await service.cancelSpendPreview(preview.id);
+  }
+
+  const protectedPreview = await service.previewSpend(btcRequest);
+  let snapshot = await service.updateSettings({ blakeConfirmations: 7 });
+  if (
+    snapshot.intents.find((intent) => intent.txid === split.txid)?.phase !== "seen" ||
+    snapshot.outputs.find((output) => output.outpoint === shared.outpoint)?.splitState !==
+      "split-pending"
+  ) throw new Error("Raising the target did not immediately withdraw cached split protection");
+  await assertRejects(
+    () => service.confirmSpend(protectedPreview.id),
+    "Transaction risk changed",
+  );
+  if (btc.broadcasts.length !== 0) throw new Error("BTC broadcast without the new replay warning");
+
+  const reopened = new WalletService(repository);
+  snapshot = await reopened.initialize();
+  if (
+    snapshot.settings.blakeConfirmations !== 7 || snapshot.settings.btcConfirmations !== 1 ||
+    snapshot.intents.find((intent) => intent.txid === split.txid)?.phase !== "seen"
+  ) throw new Error("Confirmation settings and updated protection state did not persist");
+
+  snapshot = await service.updateSettings({ btcConfirmations: 3, blakeConfirmations: 6 });
+  if (snapshot.intents.find((intent) => intent.txid === split.txid)?.phase !== "confirmed") {
+    throw new Error("Lowering the target did not re-evaluate cached confirmations");
+  }
+  const btcPreview = await service.previewSpend(btcRequest);
+  if (btcPreview.risks.length !== 0) throw new Error("Confirmed protection was not restored");
+  const spend = await service.confirmSpend(btcPreview.id);
+  btc.utxos.set(shared.address, []);
+  btc.statuses.set(spend.txid, { confirmed: true, block_height: btc.tip - 1 });
+  snapshot = await service.sync();
+  if (
+    snapshot.intents.find((intent) => intent.txid === spend.txid)?.phase !== "seen" ||
+    snapshot.intents.find((intent) => intent.txid === split.txid)?.phase !== "confirmed"
+  ) throw new Error("BTC and BLAKE intent confirmation targets were not independent");
+  snapshot = await service.updateSettings({ btcConfirmations: 2 });
+  if (snapshot.intents.find((intent) => intent.txid === spend.txid)?.phase !== "confirmed") {
+    throw new Error("BTC target change did not re-evaluate its cached confirmations");
+  }
 });
 
 Deno.test("one confirmed split coin protects a mixed BTC transaction from replay", async () => {
@@ -2320,7 +2420,7 @@ Deno.test("replayed funding stays governed and child split tracks its parent dep
     !sameTxidIntents.some((intent) => intent.id === localBtcIntentId) ||
     !sameTxidIntents.some((intent) => intent.id === replayIntent.id)
   ) throw new Error("Bitcoin and BTC-BLAKE intents with one txid did not coexist");
-  snapshot = await service.updateSettings({ fundingConfirmations: 0 });
+  snapshot = await service.updateSettings({ btcConfirmations: 0, blakeConfirmations: 0 });
   if (
     snapshot.selectableBlakeOutpoints.includes(fundingCoin.outpoint) ||
     snapshot.splittableOutpoints.includes(fundingCoin.outpoint)

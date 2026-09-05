@@ -15,7 +15,8 @@ export interface WalletSettings {
   btcApiUrl: string;
   blakeApiUrl: string;
   amountUnit: AmountUnit;
-  fundingConfirmations: number;
+  btcConfirmations: number;
+  blakeConfirmations: number;
   scanGap: number;
   btcFeeRate?: number;
   blakeFeeRate?: number;
@@ -283,7 +284,8 @@ export const DEFAULT_SETTINGS: WalletSettings = {
   btcApiUrl: "https://mempool.space/api",
   blakeApiUrl: "https://mempool.guide/api",
   amountUnit: "btc",
-  fundingConfirmations: 1,
+  btcConfirmations: 1,
+  blakeConfirmations: 1,
   scanGap: 10,
 };
 

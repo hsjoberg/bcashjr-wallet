@@ -67,6 +67,23 @@ function intentsCompeteForInput(left: TransactionIntent, right: TransactionInten
 export class IntentReconciler {
   constructor(private readonly state: () => WalletPublicState) {}
 
+  reapplyConfirmationTargets(): void {
+    const state = this.state();
+    state.intents = state.intents.map((intent) => {
+      const observation = intent.lastObservation;
+      if (
+        (intent.phase !== "seen" && intent.phase !== "confirmed") ||
+        !observation?.backendOk || !observation.tx?.present
+      ) return intent;
+      return reduceIntent(intent, {
+        type: "observed",
+        observation,
+        recoverable: false,
+        requiredConfirmations: state.settings[`${intent.chain}Confirmations`],
+      });
+    });
+  }
+
   async refreshStatuses(
     clients: WalletClients,
     tipHeights: Partial<Record<ChainId, number>>,
@@ -105,7 +122,7 @@ export class IntentReconciler {
             type: "observed",
             observation: failedIntentObservation(error),
             recoverable: false,
-            requiredConfirmations: Math.max(1, currentState.settings.fundingConfirmations),
+            requiredConfirmations: currentState.settings[`${current.chain}Confirmations`],
           });
         }
         errors.push(`${intentLabel(intent)} ${intent.txid.slice(0, 12)}: ${detail}`);
@@ -155,7 +172,7 @@ export class IntentReconciler {
       type: "observed",
       observation,
       recoverable: intentInputsAreRecoverable(state, intent),
-      requiredConfirmations: Math.max(1, state.settings.fundingConfirmations),
+      requiredConfirmations: state.settings[`${intent.chain}Confirmations`],
     });
     const refreshed = state.intents[index];
     if (refreshed.kind === "blake-replay" && status) {

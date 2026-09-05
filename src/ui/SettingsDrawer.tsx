@@ -91,24 +91,42 @@ export function SettingsDrawer({ snapshot, onClose, onSave }: SettingsDrawerProp
           </label>
           <div className="two-col">
             <label>
-              Funding confirmations
+              BTC confirmations
               <input
                 type="number"
                 min="0"
-                value={settings.fundingConfirmations}
-                onChange={(event) => patch("fundingConfirmations", Number(event.target.value))}
+                max="1000"
+                step="1"
+                value={settings.btcConfirmations}
+                onChange={(event) => patch("btcConfirmations", Number(event.target.value))}
               />
-              <small className="field-help">0 allows unconfirmed UTXOs</small>
             </label>
             <label>
-              Address gap<input
+              BLAKE confirmations
+              <input
                 type="number"
-                min="1"
-                value={settings.scanGap}
-                onChange={(event) => patch("scanGap", Number(event.target.value))}
+                min="0"
+                max="1000"
+                step="1"
+                value={settings.blakeConfirmations}
+                onChange={(event) => patch("blakeConfirmations", Number(event.target.value))}
               />
+              <small className="field-help">
+                Also required for split protection before BTC replay warnings are cleared.
+              </small>
             </label>
           </div>
+          <small className="field-help">
+            0 allows unconfirmed UTXOs. Split protection always needs at least 1 confirmation.
+          </small>
+          <label>
+            Address gap<input
+              type="number"
+              min="1"
+              value={settings.scanGap}
+              onChange={(event) => patch("scanGap", Number(event.target.value))}
+            />
+          </label>
           <div className="two-col">
             <label>
               BTC default fee rate <span className="optional">sat/vB</span>

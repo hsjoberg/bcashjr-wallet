@@ -36,8 +36,45 @@ Deno.test("wallet directory lock excludes another process instance", async () =>
 Deno.test("wallet state loading preserves current settings exactly", () => {
   const state = emptyPublicState();
   state.settings.scanGap = 20;
+  state.settings.btcConfirmations = 2;
+  state.settings.blakeConfirmations = 6;
   const loaded = parseWalletState(state);
   if (loaded.settings.scanGap !== 20) throw new Error("An explicit 20-address gap was rewritten");
+  if (loaded.settings.btcConfirmations !== 2 || loaded.settings.blakeConfirmations !== 6) {
+    throw new Error("Per-chain confirmation targets were not preserved");
+  }
+});
+
+Deno.test("confirmation settings default to one and reject invalid targets", () => {
+  const defaults = emptyPublicState();
+  if (defaults.settings.btcConfirmations !== 1 || defaults.settings.blakeConfirmations !== 1) {
+    throw new Error("New wallets must default both confirmation targets to one");
+  }
+  for (const key of ["btcConfirmations", "blakeConfirmations"] as const) {
+    const state = emptyPublicState();
+    delete (state.settings as Partial<typeof state.settings>)[key];
+    if (parseWalletState(state).settings[key] !== 1) {
+      throw new Error("An unset confirmation target did not receive its default");
+    }
+    for (const target of [0, 1, 6, 1_000]) {
+      state.settings[key] = target;
+      if (parseWalletState(state).settings[key] !== target) {
+        throw new Error("A valid confirmation target was changed");
+      }
+    }
+    for (const target of [-1, 1_001, 1.5, "1", null, false]) {
+      state.settings[key] = target as never;
+      let message = "";
+      try {
+        parseWalletState(state);
+      } catch (error) {
+        message = error instanceof Error ? error.message : String(error);
+      }
+      if (!message.includes("invalid settings")) {
+        throw new Error(`Invalid ${key} was accepted: ${target}`);
+      }
+    }
+  }
 });
 
 Deno.test("wallet state loading rejects records missing current required fields", () => {

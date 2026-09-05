@@ -29,12 +29,12 @@ export interface SpendAuthorization {
 
 function observationIsSpendable(
   observation: ChainCoinObservation,
-  settings: WalletSettings,
+  requiredConfirmations: number,
 ): boolean {
   if (!observation.backendOk || !observation.unspent || !observation.tx?.present) return false;
-  return settings.fundingConfirmations === 0 ||
+  return requiredConfirmations === 0 ||
     (observation.tx.confirmed &&
-      observation.tx.confirmations >= settings.fundingConfirmations);
+      observation.tx.confirmations >= requiredConfirmations);
 }
 
 function deriveSplitState(
@@ -51,15 +51,18 @@ function deriveSplitState(
   if (!onBlake && !onBtc) return "spent";
 
   if (onBlake && !onBtc) {
-    return observationIsSpendable(blake, settings) ? "blake-only" : "confirming";
+    return observationIsSpendable(blake, settings.blakeConfirmations) ? "blake-only" : "confirming";
   }
   if (!onBlake && onBtc) {
-    if (!observationIsSpendable(btc, settings)) return "confirming";
+    if (!observationIsSpendable(btc, settings.btcConfirmations)) return "confirming";
     if (!knownShared) return "btc-only";
     return confirmedSplit ? "split" : "split-pending";
   }
 
-  if (!observationIsSpendable(blake, settings) || !observationIsSpendable(btc, settings)) {
+  if (
+    !observationIsSpendable(blake, settings.blakeConfirmations) ||
+    !observationIsSpendable(btc, settings.btcConfirmations)
+  ) {
     return "confirming";
   }
   return splitIntents.some((intent) => intent.phase !== "abandoned") ? "split-pending" : "unsplit";
@@ -107,11 +110,11 @@ export function deriveCoinPolicy(
     .sort();
   const confirmedSplit = confirmedSplitIntentIds.length > 0;
 
-  const blakeSpendable = observationIsSpendable(coin.blake, settings);
-  const btcSpendable = observationIsSpendable(coin.btc, settings);
+  const blakeSpendable = observationIsSpendable(coin.blake, settings.blakeConfirmations);
+  const btcSpendable = observationIsSpendable(coin.btc, settings.btcConfirmations);
   const onBlake = coin.blake.backendOk && coin.blake.unspent === true;
   const onBtc = coin.btc.backendOk && coin.btc.unspent === true;
-  const splittable = onBlake && onBtc && blakeSpendable && btcSpendable &&
+  const splittable = onBlake && onBtc && blakeSpendable &&
     blockingOnBlake.length === 0 && unifiedSpends.length === 0 && !replayInputReservedOnBlake;
   const blakeOnlySpendable = onBlake && coin.btc.backendOk && coin.btc.unspent === false &&
     blakeSpendable && blockingOnBlake.length === 0 && unifiedSpends.length === 0 &&

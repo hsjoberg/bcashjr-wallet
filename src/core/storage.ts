@@ -4,6 +4,7 @@ import { assertWalletStateInvariants } from "./intent_state.ts";
 import {
   type ChainCoinObservation,
   type ChainTxStatus,
+  DEFAULT_SETTINGS,
   emptyPublicState,
   type IntentObservation,
   type PersistedCoin,
@@ -108,9 +109,10 @@ function validSettings(value: unknown): value is WalletPublicState["settings"] {
       feeRate <= MAX_FEE_RATE);
   return validBackendUrl(value.btcApiUrl) && validBackendUrl(value.blakeApiUrl) &&
     (value.amountUnit === "btc" || value.amountUnit === "sat") &&
-    Number.isSafeInteger(value.fundingConfirmations) &&
-    (value.fundingConfirmations as number) >= 0 &&
-    (value.fundingConfirmations as number) <= 1_000 &&
+    [value.btcConfirmations, value.blakeConfirmations].every((confirmations) =>
+      Number.isSafeInteger(confirmations) &&
+      (confirmations as number) >= 0 && (confirmations as number) <= 1_000
+    ) &&
     Number.isSafeInteger(value.scanGap) && (value.scanGap as number) >= 1 &&
     (value.scanGap as number) <= 1_000 &&
     feeRateIsValid(value.btcFeeRate) && feeRateIsValid(value.blakeFeeRate);
@@ -258,7 +260,16 @@ export function parseWalletState(value: unknown): WalletPublicState {
   if (stored.settings.amountUnit !== "btc" && stored.settings.amountUnit !== "sat") {
     throw new Error("Wallet state is malformed");
   }
-  if (!validSettings(stored.settings)) {
+  const settings = {
+    ...stored.settings,
+    btcConfirmations: stored.settings.btcConfirmations === undefined
+      ? DEFAULT_SETTINGS.btcConfirmations
+      : stored.settings.btcConfirmations,
+    blakeConfirmations: stored.settings.blakeConfirmations === undefined
+      ? DEFAULT_SETTINGS.blakeConfirmations
+      : stored.settings.blakeConfirmations,
+  };
+  if (!validSettings(settings)) {
     throw new Error("Wallet state contains invalid settings");
   }
   if (
@@ -306,17 +317,14 @@ export function parseWalletState(value: unknown): WalletPublicState {
     intents: structuredClone(stored.intents),
     tips: structuredClone(stored.tips as WalletPublicState["tips"]),
     settings: {
-      btcApiUrl: stored.settings.btcApiUrl,
-      blakeApiUrl: stored.settings.blakeApiUrl,
-      amountUnit: stored.settings.amountUnit,
-      fundingConfirmations: stored.settings.fundingConfirmations,
-      scanGap: stored.settings.scanGap,
-      ...(stored.settings.btcFeeRate !== undefined
-        ? { btcFeeRate: stored.settings.btcFeeRate }
-        : {}),
-      ...(stored.settings.blakeFeeRate !== undefined
-        ? { blakeFeeRate: stored.settings.blakeFeeRate }
-        : {}),
+      btcApiUrl: settings.btcApiUrl,
+      blakeApiUrl: settings.blakeApiUrl,
+      amountUnit: settings.amountUnit,
+      btcConfirmations: settings.btcConfirmations,
+      blakeConfirmations: settings.blakeConfirmations,
+      scanGap: settings.scanGap,
+      ...(settings.btcFeeRate !== undefined ? { btcFeeRate: settings.btcFeeRate } : {}),
+      ...(settings.blakeFeeRate !== undefined ? { blakeFeeRate: settings.blakeFeeRate } : {}),
     },
     ...(stored.lastSyncAt !== undefined ? { lastSyncAt: stored.lastSyncAt } : {}),
     ...(stored.lastSyncError !== undefined ? { lastSyncError: stored.lastSyncError } : {}),
