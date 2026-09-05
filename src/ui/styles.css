@@ -387,6 +387,11 @@ input[type="checkbox"] {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 9px;
+}
+.notice-message {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .notice-close {
   border: 0;
@@ -568,12 +573,13 @@ input[type="checkbox"] {
 }
 
 .app-shell {
+  --toolbar-height: 48px;
   min-height: 100vh;
   min-height: 100dvh;
   background: #090c10;
 }
 .topbar {
-  height: 48px;
+  height: var(--toolbar-height);
   border-bottom: 0;
   background: #090c10;
   display: flex;
@@ -629,19 +635,44 @@ input[type="checkbox"] {
   margin: 0 auto;
   padding: 4px 20px 14px;
 }
+.dashboard-notices {
+  /* Keep the floating stack below Sync/Settings/Lock without shifting the cards. */
+  position: fixed;
+  top: calc(var(--toolbar-height) + 2px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  width: min(1540px, calc(100% - 40px));
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 50vh;
+  max-height: min(420px, 50dvh, calc(100dvh - var(--toolbar-height) - 24px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  filter: drop-shadow(0 8px 18px rgba(0,0,0,.4));
+}
+.dashboard-notices > div {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 9px 12px;
+  font-size: 11px;
+  line-height: 17px;
+}
 .warning-banner {
   border: 1px solid #5b4220;
   background: #21190f;
   color: #d9b476;
   border-radius: 8px;
   padding: 9px 12px;
-  margin-bottom: 14px;
   font-size: 11px;
   display: flex;
   align-items: center;
   gap: 9px;
 }
 .warning-banner > span {
+  flex: 0 0 auto;
   display: grid;
   place-items: center;
   border: 1px solid currentColor;
@@ -655,13 +686,6 @@ input[type="checkbox"] {
   color: #f2aaa5;
   border-color: #713a35;
   background: #2b1513;
-}
-.wallet-workspace > .success-box,
-.wallet-workspace > .global-error {
-  margin-bottom: 14px;
-  padding: 9px 12px;
-  font-size: 11px;
-  line-height: 17px;
 }
 .balance-grid {
   display: grid;
@@ -1570,6 +1594,41 @@ td small {
   color: #83b3ef;
   border-color: #334f75;
   background: #131d2a;
+}
+
+@media (min-width: 1121px) {
+  .wallet-workspace {
+    height: calc(100dvh - var(--toolbar-height));
+    display: flex;
+    flex-direction: column;
+  }
+  .balance-grid,
+  .utility-panels,
+  .transaction-recovery {
+    flex: 0 0 auto;
+  }
+  .chain-panels {
+    /* Use the remaining window height; keep page scrolling if it cannot fit. */
+    flex: 1 0 auto;
+  }
+  .chain-panel,
+  .receive-panel,
+  .replay-panel {
+    height: auto;
+  }
+  .chain-panel-header,
+  .utxo-toolbar,
+  .chain-compose,
+  .replay-panel-header {
+    flex-shrink: 0;
+  }
+  .utxo-list,
+  .replay-list {
+    /* Coin count must not push the receive panel below the window. */
+    height: 112px;
+    flex: 1 1 112px;
+    max-height: none;
+  }
 }
 
 @media (max-width: 1120px) {

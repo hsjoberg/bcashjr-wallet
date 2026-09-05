@@ -323,17 +323,6 @@ export function Dashboard({ snapshot, setSnapshot }: DashboardProps) {
         </header>
 
         <main className="dashboard wallet-workspace">
-          <DashboardNotices
-            snapshot={snapshot}
-            dismissedWarnings={dismissedWarnings}
-            error={error}
-            success={success}
-            onDismissWarning={(warning) =>
-              setDismissedWarnings((current) => new Set(current).add(warning))}
-            onDismissError={() => setError("")}
-            onDismissSuccess={() => setSuccess(null)}
-          />
-
           <BalanceSummary snapshot={snapshot} />
 
           <section className="chain-panels">
@@ -408,6 +397,17 @@ export function Dashboard({ snapshot, setSnapshot }: DashboardProps) {
             />
           </section>
         </main>
+
+        <DashboardNotices
+          snapshot={snapshot}
+          dismissedWarnings={dismissedWarnings}
+          error={error}
+          success={success}
+          onDismissWarning={(warning) =>
+            setDismissedWarnings((current) => new Set(current).add(warning))}
+          onDismissError={() => setError("")}
+          onDismissSuccess={() => setSuccess(null)}
+        />
 
         {settingsOpen && (
           <SettingsDrawer

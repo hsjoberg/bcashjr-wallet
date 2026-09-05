@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   OBSERVATION_FRESHNESS_MS,
   observationsAreStale,
@@ -49,6 +49,10 @@ export function DashboardNotices(
   },
 ) {
   const [, refreshFreshness] = useState(0);
+  const stack = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (error || success) stack.current?.scrollTo({ top: 0 });
+  }, [error, success]);
   const hasUnspentOutput = snapshot.outputs.some((output) =>
     output.blake.unspent === true || output.btc.unspent === true
   );
@@ -69,37 +73,24 @@ export function DashboardNotices(
   const stale = observationsAreStale(snapshot.lastSyncAt, hasUnspentOutput);
   const warnings = snapshot.warnings.filter((warning) => warning !== STALE_OBSERVATIONS_WARNING);
   if (stale) warnings.unshift(STALE_OBSERVATIONS_WARNING);
+  const visibleWarnings = warnings.filter((warning) =>
+    warning === STALE_OBSERVATIONS_WARNING || !dismissedWarnings.has(warning)
+  );
+  if (visibleWarnings.length === 0 && !error && !success) return null;
 
   return (
-    <>
-      {warnings
-        .filter((warning) => !dismissedWarnings.has(warning))
-        .map((warning) => {
-          const stale = warning === STALE_OBSERVATIONS_WARNING;
-          return (
-            <div
-              className={`warning-banner ${stale ? "stale-warning" : ""}`}
-              key={warning}
-            >
-              <span>!</span>
-              {warning}
-              {!stale && (
-                <NoticeClose
-                  label="Dismiss warning"
-                  onClick={() => onDismissWarning(warning)}
-                />
-              )}
-            </div>
-          );
-        })}
+    <aside className="dashboard-notices" aria-label="Wallet notifications" ref={stack}>
       {error && (
-        <div className="error-box global-error">
-          {error}
-          <NoticeClose label="Dismiss error" onClick={onDismissError} />
+        <div className="error-box global-error" role="alert">
+          <div className="notice-message">{error}</div>
+          <NoticeClose
+            label="Dismiss error"
+            onClick={onDismissError}
+          />
         </div>
       )}
       {success && (
-        <div className="success-box">
+        <div className="success-box" role="status">
           <span>{success.label}</span>
           <a
             className="tx-link success-tx-link"
@@ -115,9 +106,31 @@ export function DashboardNotices(
           >
             <code>{success.txid}</code>
           </a>
-          <NoticeClose label="Dismiss broadcast notice" onClick={onDismissSuccess} />
+          <NoticeClose
+            label="Dismiss broadcast notice"
+            onClick={onDismissSuccess}
+          />
         </div>
       )}
-    </>
+      {visibleWarnings.map((warning) => {
+        const stale = warning === STALE_OBSERVATIONS_WARNING;
+        return (
+          <div
+            className={`warning-banner ${stale ? "stale-warning" : ""}`}
+            key={warning}
+            role="status"
+          >
+            <span aria-hidden="true">!</span>
+            <div className="notice-message">{warning}</div>
+            {!stale && (
+              <NoticeClose
+                label="Dismiss warning"
+                onClick={() => onDismissWarning(warning)}
+              />
+            )}
+          </div>
+        );
+      })}
+    </aside>
   );
 }
