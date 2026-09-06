@@ -15,6 +15,7 @@ import {
   shouldUseUiIndexFallback,
 } from "./src/server_security.ts";
 import { setWindowsWindowAppearance } from "./src/windows_window_background.ts";
+import { focusWindowsWebview } from "./src/windows_webview_focus.ts";
 
 type RpcRequest = { method: string; payload?: unknown };
 
@@ -127,6 +128,15 @@ if (BrowserWindow) {
     }
     window.focus();
     return null;
+  });
+  window.bind("focusDesktopContent", () => {
+    try {
+      return focusWindowsWebview();
+    } catch (error) {
+      // A native focus failure must not prevent the wallet UI from opening.
+      console.warn("Could not focus the desktop content", error);
+      return false;
+    }
   });
   window.addEventListener("close", () => {
     walletDirectoryLock.close();
