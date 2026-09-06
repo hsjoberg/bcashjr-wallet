@@ -91,6 +91,19 @@ The Linux WebView build uses the system's GTK 3 and WebKitGTK 4.1 libraries; on 
 these are provided by `libgtk-3-0` and `libwebkit2gtk-4.1-0`. An AppImage downloaded from the web
 may need to be made executable before launching.
 
+### Linux: blank or black window
+
+If the AppImage opens a blank or black window under Wayland, as reported on some NVIDIA systems,
+close the app and try launching it with X11:
+
+```bash
+GDK_BACKEND=x11 ./bcashjr-wallet.AppImage
+```
+
+Replace the filename with your downloaded AppImage's name. This selects X11 for this launch only;
+it does not change your desktop session or global settings. On Wayland, XWayland must be available.
+Use this workaround only if normal launching fails.
+
 ## Publishing a release
 
 The **Release** workflow is started manually from GitHub Actions. It validates the project, bumps
