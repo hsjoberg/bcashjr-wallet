@@ -11,6 +11,7 @@ interface DesktopBindings {
     availTop: number;
     devicePixelRatio: number;
   }): Promise<unknown>;
+  focusDesktopContent(): Promise<unknown>;
 }
 
 const desktopBindings = (globalThis as unknown as { bindings?: DesktopBindings }).bindings;
@@ -25,6 +26,9 @@ async function mountApp() {
       availTop: desktopScreen.availTop ?? 0,
       devicePixelRatio: globalThis.devicePixelRatio,
     }).catch(() => undefined);
+    // Native window activation must finish before transferring keyboard focus
+    // into WebView2. React's input autofocus alone cannot make that handoff.
+    await desktopBindings.focusDesktopContent().catch(() => undefined);
   }
 
   createRoot(document.getElementById("root")!).render(
