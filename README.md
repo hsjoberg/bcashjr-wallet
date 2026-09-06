@@ -95,13 +95,14 @@ may need to be made executable before launching. Building the AppImage locally a
 ### Linux: blank or black window
 
 The AppImage automatically selects GTK's X11 backend through XWayland when launched from a Wayland
-session. This avoids a WebKitGTK native-Wayland failure that can produce a black window and
-unbounded renderer memory use. It does not change the desktop session or global settings.
+session, including sessions that export `GDK_BACKEND=wayland` globally. This avoids a WebKitGTK
+native-Wayland failure that can produce a black window and unbounded renderer memory use. It does
+not change the desktop session or global settings.
 
 To test native Wayland explicitly, override the packaged default for one launch:
 
 ```bash
-GDK_BACKEND=wayland ./bcashjr-wallet.AppImage
+BCASHJR_NATIVE_WAYLAND=1 GDK_BACKEND=wayland ./bcashjr-wallet.AppImage
 ```
 
 Replace the filename with your downloaded AppImage's name. Native Wayland may still show the black

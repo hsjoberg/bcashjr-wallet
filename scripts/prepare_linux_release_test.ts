@@ -98,16 +98,27 @@ exit "\${FAKE_EXIT_CODE:-0}"
         `Arguments were not preserved: ${wayland.output}`,
       );
 
-      const explicitWayland = await runLauncher(directory, {
+      const inheritedWayland = await runLauncher(directory, {
         WAYLAND_DISPLAY: "wayland-0",
         DISPLAY: ":1",
         GDK_BACKEND: "wayland",
         FAKE_EXIT_CODE: "23",
       });
-      assert(explicitWayland.code === 23, "Child exit status was not preserved");
+      assert(inheritedWayland.code === 23, "Child exit status was not preserved");
       assert(
-        explicitWayland.output.includes("backend=wayland\n"),
-        "AppRun overwrote an explicit backend",
+        inheritedWayland.output.includes("backend=x11\n"),
+        "A globally exported Wayland backend bypassed the workaround",
+      );
+
+      const nativeWaylandOptIn = await runLauncher(directory, {
+        WAYLAND_DISPLAY: "wayland-0",
+        DISPLAY: ":1",
+        GDK_BACKEND: "wayland",
+        BCASHJR_NATIVE_WAYLAND: "1",
+      });
+      assert(
+        nativeWaylandOptIn.output.includes("backend=wayland\n"),
+        "AppRun ignored the native Wayland opt-in",
       );
 
       const nativeX11 = await runLauncher(directory, { DISPLAY: ":0" });
