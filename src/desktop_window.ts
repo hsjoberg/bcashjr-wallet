@@ -12,7 +12,7 @@ export interface DesktopWindowGeometry {
   y: number;
 }
 
-const PREFERRED_WIDTH = 1_580;
+const PREFERRED_WIDTH = 1_650;
 const PREFERRED_HEIGHT = 1_150;
 const HORIZONTAL_WORK_AREA_MARGIN = 32;
 const VERTICAL_WORK_AREA_MARGIN = 16;

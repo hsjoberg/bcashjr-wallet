@@ -829,19 +829,32 @@ input[type="checkbox"] {
   padding: 13px;
   color: #dbe2e8;
   font-size: 12px;
+  line-height: 1.5;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .address-box button {
   align-self: stretch;
+  flex: 0 0 36px;
+  display: grid;
+  place-items: center;
   border: 0;
   border-left: 1px solid #2a3540;
-  padding: 0 14px;
+  padding: 0;
   background: #151c23;
   color: #7cdab0;
   font-size: 11px;
   font-weight: 750;
+}
+.address-box button svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .count-pill {
   color: #85919e;
@@ -1161,8 +1174,8 @@ td small {
 }
 .receive-address-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 174px;
-  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) 150px;
+  gap: 12px;
   align-items: center;
   margin-top: 17px;
 }

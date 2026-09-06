@@ -9,8 +9,8 @@ Deno.test("desktop window uses its preferred size on a large work area", () => {
   });
 
   if (
-    !geometry || geometry.width !== 1_580 || geometry.height !== 1_150 ||
-    geometry.x !== 490 || geometry.y !== 505
+    !geometry || geometry.width !== 1_650 || geometry.height !== 1_150 ||
+    geometry.x !== 455 || geometry.y !== 505
   ) throw new Error(`Unexpected geometry: ${JSON.stringify(geometry)}`);
 });
 
@@ -23,8 +23,8 @@ Deno.test("desktop window converts a scaled Windows work area to native pixels",
   }, 1.1);
 
   if (
-    !geometry || geometry.width !== 1_580 || geometry.height !== 1_150 ||
-    geometry.x !== 1_770 || geometry.y !== 119
+    !geometry || geometry.width !== 1_650 || geometry.height !== 1_150 ||
+    geometry.x !== 1_735 || geometry.y !== 119
   ) throw new Error(`Unexpected geometry: ${JSON.stringify(geometry)}`);
 });
 
@@ -37,8 +37,8 @@ Deno.test("desktop window stays below 1080px on a 1080p work area", () => {
   });
 
   if (
-    !geometry || geometry.width !== 1_580 || geometry.height !== 1_024 ||
-    geometry.x !== 170 || geometry.y !== 8
+    !geometry || geometry.width !== 1_650 || geometry.height !== 1_024 ||
+    geometry.x !== 135 || geometry.y !== 8
   ) throw new Error(`Unexpected geometry: ${JSON.stringify(geometry)}`);
 });
 

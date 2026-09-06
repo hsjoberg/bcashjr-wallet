@@ -36,12 +36,19 @@ export function ReceivePanel(
           <div className="receive-address-layout">
             <div className="receive-address-details">
               <div className="address-box">
-                <code>{snapshot.receiveAddress.address}</code>
+                <code title={snapshot.receiveAddress.address}>
+                  {snapshot.receiveAddress.address}
+                </code>
                 <button
                   type="button"
+                  aria-label="Copy receive address"
+                  title="Copy receive address"
                   onClick={() => navigator.clipboard.writeText(snapshot.receiveAddress!.address)}
                 >
-                  Copy
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="8" y="8" width="12" height="12" rx="2" />
+                    <path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3" />
+                  </svg>
                 </button>
               </div>
               <p className="microcopy">
