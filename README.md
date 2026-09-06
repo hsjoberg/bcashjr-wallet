@@ -89,20 +89,24 @@ distribution. On Windows the task creates `dist/windows/BcashJr Wallet`, and on 
 
 The Linux WebView build uses the system's GTK 3 and WebKitGTK 4.1 libraries; on Debian or Ubuntu
 these are provided by `libgtk-3-0` and `libwebkit2gtk-4.1-0`. An AppImage downloaded from the web
-may need to be made executable before launching.
+may need to be made executable before launching. Building the AppImage locally also requires
+`squashfs-tools`, which applies the Linux compatibility launcher after Deno creates the package.
 
 ### Linux: blank or black window
 
-If the AppImage opens a blank or black window under Wayland, as reported on some NVIDIA systems,
-close the app and try launching it with X11:
+The AppImage automatically selects GTK's X11 backend through XWayland when launched from a Wayland
+session. This avoids a WebKitGTK native-Wayland failure that can produce a black window and
+unbounded renderer memory use. It does not change the desktop session or global settings.
+
+To test native Wayland explicitly, override the packaged default for one launch:
 
 ```bash
-GDK_BACKEND=x11 ./bcashjr-wallet.AppImage
+GDK_BACKEND=wayland ./bcashjr-wallet.AppImage
 ```
 
-Replace the filename with your downloaded AppImage's name. This selects X11 for this launch only;
-it does not change your desktop session or global settings. On Wayland, XWayland must be available.
-Use this workaround only if normal launching fails.
+Replace the filename with your downloaded AppImage's name. Native Wayland may still show the black
+window on affected WebKitGTK versions. When XWayland is unavailable, the launcher leaves GTK's
+backend selection unchanged rather than forcing an unreachable X11 display.
 
 ## Publishing a release
 
@@ -121,8 +125,8 @@ rerunning the failed job resumes the matching tag and draft release instead of i
 
 Configure these GitHub Actions repository secrets before running the workflow:
 
-- `MACOS_CERTIFICATE_BASE64`: the Developer ID Application certificate and private key exported as
-  a password-protected `.p12`, then Base64 encoded.
+- `MACOS_CERTIFICATE_BASE64`: the Developer ID Application certificate and private key exported as a
+  password-protected `.p12`, then Base64 encoded.
 - `MACOS_CERTIFICATE_PASSWORD`: the `.p12` export password.
 - `APPLE_ID`: the Apple Developer account email used for notarization.
 - `APPLE_APP_SPECIFIC_PASSWORD`: an app-specific password for that Apple ID.
