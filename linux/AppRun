@@ -1,0 +1,19 @@
+#!/bin/sh
+set -eu
+
+APP_DIR=$(dirname "$0")
+APP_DIR=$(CDPATH='' cd "$APP_DIR" && pwd)
+
+# Deno Desktop uses native Wayland whenever a Wayland display is available.
+# WebKitGTK can render a black window and grow without bound on Ubuntu 26.04's
+# native Wayland path. Prefer the proven XWayland path when it is available,
+# even if the desktop session exports GDK_BACKEND=wayland globally. Keep an
+# app-specific escape hatch for diagnostics and Wayland-only environments.
+if [ -n "${WAYLAND_DISPLAY:-}" ] &&
+  [ -n "${DISPLAY:-}" ] &&
+  [ "${BCASHJR_NATIVE_WAYLAND:-}" != 1 ]; then
+  GDK_BACKEND=x11
+  export GDK_BACKEND
+fi
+
+exec "$APP_DIR/bcashjr-wallet" "$@"

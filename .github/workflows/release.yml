@@ -56,6 +56,9 @@ jobs:
           deno-version: ${{ env.DENO_VERSION }}
           cache: true
 
+      - name: Install Linux packaging tools
+        run: sudo apt-get update && sudo apt-get install --yes squashfs-tools
+
       - name: Validate release candidate
         shell: bash
         run: |
@@ -159,6 +162,10 @@ jobs:
       - name: Install dependencies
         run: deno install --frozen
 
+      - name: Install Linux packaging tools
+        if: ${{ matrix.platform == 'linux' }}
+        run: sudo apt-get update && sudo apt-get install --yes squashfs-tools
+
       - name: Build desktop package
         shell: bash
         run: |
@@ -172,6 +179,10 @@ jobs:
             --exclude-unused-npm \
             --include dist/ui \
             main.ts
+
+      - name: Apply Linux Wayland compatibility launcher
+        if: ${{ matrix.platform == 'linux' }}
+        run: deno run --no-config -A scripts/prepare_linux_release.ts
 
       - name: Archive macOS signing input
         if: ${{ matrix.platform == 'macos' }}

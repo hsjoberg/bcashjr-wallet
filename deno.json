@@ -27,7 +27,7 @@
     "check": "deno check main.ts src/**/*.ts src/**/*.tsx",
     "test": "deno test -A",
     "lint": "deno lint",
-    "desktop": "deno task ui:build && deno desktop -A --env-file=desktop.env --node-modules-dir=none --exclude-unused-npm --include dist/ui main.ts && deno run -A scripts/prepare_macos_release.ts"
+    "desktop": "deno task ui:build && deno desktop -A --env-file=desktop.env --node-modules-dir=none --exclude-unused-npm --include dist/ui main.ts && deno run --no-config -A scripts/prepare_linux_release.ts && deno run -A scripts/prepare_macos_release.ts"
   },
   "desktop": {
     "app": {
